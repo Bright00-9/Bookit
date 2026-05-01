@@ -19,10 +19,15 @@ jobs:
         with:
           flutter-version: '3.19.0'
           
-      - run: flutter pub get
-      - run: flutter build apk --debug
+      - name: Get dependencies
+        run: flutter pub get
+        working-directory: MoKa_app
+          
+      - name: Build APK
+        run: flutter build apk --debug
+        working-directory: MoKa_app
       
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: MoKa_app/build/app/outputs/flutter-apk/app-debug.apk
