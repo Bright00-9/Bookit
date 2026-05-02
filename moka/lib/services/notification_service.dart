@@ -1,6 +1,10 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'auth_service.dart';
+
+// Global navigator key for notification tap navigation
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -73,9 +77,14 @@ class NotificationService {
   }
 
   static void _handleNotificationTap(RemoteMessage message) {
-    // TODO: Navigate to job detail screen
     final jobId = message.data['job_id'];
-    print('Tapped notification for job: $jobId');
+    if (jobId != null) {
+      // Navigate to worker home — job list will show the relevant job
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/worker-home',
+        (route) => false,
+      );
+    }
   }
 }
 

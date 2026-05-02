@@ -1,3 +1,5 @@
+import 'dart:math';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
 class JobService {
@@ -85,6 +87,13 @@ class JobService {
     final user = supabase.auth.currentUser;
     if (user == null) throw Exception('Not logged in');
 
+    // Fetch job to get customer_id
+    final job = await supabase
+        .from('jobs')
+        .select('customer_id')
+        .eq('id', jobId)
+        .single();
+
     await supabase.from('job_applications').insert({
       'job_id': jobId,
       'worker_id': user.id,
@@ -95,6 +104,13 @@ class JobService {
     await supabase
         .from('jobs')
         .update({'status': 'accepted'}).eq('id', jobId);
+
+    // Create a conversation between customer and worker
+    await supabase.from('conversations').insert({
+      'job_id': jobId,
+      'customer_id': job['customer_id'],
+      'worker_id': user.id,
+    });
   }
 
   // Complete a job
@@ -116,12 +132,10 @@ class JobService {
     const earthRadius = 6371.0;
     final dLat = _toRad(lat2 - lat1);
     final dLng = _toRad(lng2 - lng1);
-    final a = (dLat / 2) * (dLat / 2) +
-        _toRad(lat1) *
-            _toRad(lat2) *
-            (dLng / 2) *
-            (dLng / 2);
-    final c = 2 * (a < 1 ? a : 1);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRad(lat1)) * cos(_toRad(lat2)) *
+        sin(dLng / 2) * sin(dLng / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
     return earthRadius * c;
   }
 

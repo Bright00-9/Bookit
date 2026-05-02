@@ -75,6 +75,22 @@ class AuthService {
         .update({'fcm_token': token}).eq('id', user.id);
   }
 
+  // Get current user email
+  static String? get currentEmail => supabase.auth.currentUser?.email;
+
+  // Update profile name and phone
+  static Future<void> updateProfile({
+    required String name,
+    required String phone,
+  }) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+    await supabase.from('profiles').update({
+      'name': name,
+      'phone': phone,
+    }).eq('id', user.id);
+  }
+
   // Update worker online status and location
   static Future<void> updateWorkerStatus({
     required bool isOnline,
