@@ -16,6 +16,7 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   String _selectedRole = 'customer'; // 'customer' or 'worker'
+  String? _selectedSkill;
 
   @override
   Widget build(BuildContext context) {

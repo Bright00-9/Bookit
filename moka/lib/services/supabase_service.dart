@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String supabaseUrl = 'YOUR_SUPABASE_URL';       // 🔁 Replace this
-const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'; // 🔁 Replace this
+const String supabaseUrl = 'https://xtbsezfdmeuhfycglegk.supabase.co';      
+const String supabaseAnonKey = 'sb_publishable_b2mO7hKBJ2qF0T2rjQNesg_nz5_2Ixe'; 
 
 final supabase = Supabase.instance.client;
 
@@ -11,3 +11,8 @@ Future<void> initSupabase() async {
     anonKey: supabaseAnonKey,
   );
 }
+
+
+
+
+
