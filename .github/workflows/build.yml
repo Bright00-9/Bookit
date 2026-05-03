@@ -27,11 +27,17 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Clean Gradle cache
+        run: |
+          cd android
+          ./gradlew clean
+          cd ..
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
