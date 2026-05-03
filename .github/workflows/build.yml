@@ -30,6 +30,7 @@ jobs:
       - name: Clean Gradle cache
         run: |
           cd android
+          chmod +x gradlew
           ./gradlew clean
           cd ..
 
