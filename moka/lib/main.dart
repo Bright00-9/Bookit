@@ -15,10 +15,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Init Firebase
-  //await Firebase.initializeApp();
+  await Firebase.initializeApp();
 
   // Register background message handler
-  //FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Init Supabase
   await initSupabase();
