@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
 class JobService {
@@ -10,6 +11,7 @@ class JobService {
     required String urgency,
     required double lat,
     required double lng,
+    double budget = 0,
   }) async {
     final user = supabase.auth.currentUser;
     if (user == null) throw Exception('Not logged in');
@@ -22,6 +24,7 @@ class JobService {
       'urgency': urgency,
       'lat': lat,
       'lng': lng,
+      'budget': budget,
       'status': 'open',
     }).select().single();
 

@@ -12,6 +12,7 @@ class PostJobScreen extends StatefulWidget {
 class _PostJobScreenState extends State<PostJobScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
+  final _budgetController = TextEditingController();
   String? _selectedSkill;
   String _selectedUrgency = 'normal';
   bool _isLoading = false;
@@ -153,6 +154,17 @@ class _PostJobScreenState extends State<PostJobScreen> {
 
             const SizedBox(height: 20),
 
+            _buildLabel('Budget (GHS)'),
+            const SizedBox(height: 8),
+            _buildTextField(
+              controller: _budgetController,
+              hint: 'e.g. 150.00',
+              prefixIcon: Icons.payments_outlined,
+              keyboardType: TextInputType.number,
+            ),
+
+            const SizedBox(height: 20),
+
             _buildLabel('Description'),
             const SizedBox(height: 8),
             TextField(
@@ -287,9 +299,11 @@ class _PostJobScreenState extends State<PostJobScreen> {
     required TextEditingController controller,
     required String hint,
     required IconData prefixIcon,
+    TextInputType? keyboardType,
   }) {
     return TextField(
       controller: controller,
+      keyboardType: keyboardType,
       style: const TextStyle(color: Colors.white, fontSize: 15),
       decoration: InputDecoration(
         hintText: hint,
@@ -337,6 +351,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         urgency: _selectedUrgency,
         lat: _lat!,
         lng: _lng!,
+        budget: double.tryParse(_budgetController.text.trim()) ?? 0,
       );
 
       if (!mounted) return;

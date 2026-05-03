@@ -5,6 +5,7 @@ import 'profile_screen.dart';
 import 'messages_screen.dart';
 import 'post_job_screen.dart';
 import 'rate_worker_screen.dart';
+import 'payment_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -464,37 +465,82 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     color: Color(0xFF555555), fontSize: 11),
               ),
               if (status == 'completed') ...[
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RateWorkerScreen(
-                        jobId: job['id'],
-                        workerId: job['worker_id'] ?? '',
-                        workerName: job['worker_name'] ?? 'Worker',
-                        jobTitle: job['title'] ?? '',
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PaymentScreen(
+                              jobId: job['id'],
+                              workerId: job['worker_id'] ?? '',
+                              workerName: job['worker_name'] ?? 'Worker',
+                              jobTitle: job['title'] ?? '',
+                              amount: (job['budget'] as num?)?.toDouble() ?? 0,
+                            ),
+                          ),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4CAF50).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: const Color(0xFF4CAF50).withOpacity(0.4)),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              '💳 Pay',
+                              style: TextStyle(
+                                color: Color(0xFF4CAF50),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6B00).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: const Color(0xFFFF6B00).withOpacity(0.4)),
-                    ),
-                    child: const Text(
-                      '⭐ Rate',
-                      style: TextStyle(
-                        color: Color(0xFFFF6B00),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RateWorkerScreen(
+                              jobId: job['id'],
+                              workerId: job['worker_id'] ?? '',
+                              workerName: job['worker_name'] ?? 'Worker',
+                              jobTitle: job['title'] ?? '',
+                            ),
+                          ),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B00).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: const Color(0xFFFF6B00).withOpacity(0.4)),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              '⭐ Rate',
+                              style: TextStyle(
+                                color: Color(0xFFFF6B00),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ],
