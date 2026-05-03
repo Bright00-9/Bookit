@@ -1,37 +1,83 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'auth_service.dart';
 
-// Global navigator key for notification tap navigation
+// Global navigator key — used to navigate from notification tap
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// ✅ Background handler must be top-level AND initialize Firebase
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint('Background message received: ${message.messageId}');
+}
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
+  // ✅ Create Android notification channel explicitly
+  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+    'moka_jobs',
+    'Job Alerts',
+    description: 'Notifications for nearby job postings',
+    importance: Importance.high,
+  );
+
   static Future<void> initialize() async {
     // Request permission
-    await _messaging.requestPermission(
+    final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    // Initialize local notifications
+    debugPrint('Notification permission: ${settings.authorizationStatus}');
+
+    // ✅ Create the Android notification channel
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_channel);
+
+    // Initialize local notifications with tap callback
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings();
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: false, // already requested above
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
-    await _localNotifications.initialize(initSettings);
+
+    await _localNotifications.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (response.payload != null) {
+          navigatorKey.currentState?.pushNamedAndRemoveUntil(
+            '/worker-home',
+            (route) => false,
+          );
+        }
+      },
+    );
+
+    // ✅ Handle app opened from terminated state via notification
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _handleNotificationTap(initialMessage);
+    }
 
     // Get FCM token and save to Supabase
     final token = await _messaging.getToken();
     if (token != null) {
+      debugPrint('FCM Token: $token');
       await AuthService.updateFcmToken(token);
     }
 
@@ -45,7 +91,7 @@ class NotificationService {
       _showLocalNotification(message);
     });
 
-    // Handle background message tap
+    // Handle notification tap when app is in background (not terminated)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       _handleNotificationTap(message);
     });
@@ -53,25 +99,36 @@ class NotificationService {
 
   // Show local notification when app is in foreground
   static Future<void> _showLocalNotification(RemoteMessage message) async {
-    const androidDetails = AndroidNotificationDetails(
-      'moka_jobs',
-      'Job Alerts',
-      channelDescription: 'Notifications for nearby job postings',
+    final notification = message.notification;
+    if (notification == null) return;
+
+    final androidDetails = AndroidNotificationDetails(
+      _channel.id,
+      _channel.name,
+      channelDescription: _channel.description,
       importance: Importance.high,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
+      // ✅ Show heads-up notification on Android
+      fullScreenIntent: message.data['urgency'] == 'emergency',
     );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
     await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      message.notification?.title ?? 'New Job Alert',
-      message.notification?.body ?? 'A new job is available near you',
-      details,
+      id: notification.hashCode,
+      title: notification.title ?? 'New Job Alert',
+      body: notification.body ?? 'A new job is available near you',
+      notificationDetails: details,
       payload: message.data['job_id'],
     );
   }
@@ -79,17 +136,10 @@ class NotificationService {
   static void _handleNotificationTap(RemoteMessage message) {
     final jobId = message.data['job_id'];
     if (jobId != null) {
-      // Navigate to worker home — job list will show the relevant job
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
         '/worker-home',
         (route) => false,
       );
     }
   }
-}
-
-// Background message handler (must be top-level function)
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print('Background message received: ${message.messageId}');
 }
