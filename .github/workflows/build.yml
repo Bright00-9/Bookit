@@ -27,6 +27,15 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Clear pub cache (optional)
+        run: flutter pub cache repair
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Clean build
+        run: flutter clean
+
       - name: Install dependencies
         run: flutter pub get
 
