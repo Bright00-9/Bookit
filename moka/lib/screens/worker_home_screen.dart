@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/auth_service.dart';
 import '../services/job_service.dart';
+import 'job_detail_screen.dart';
+import 'messages_screen.dart';
+import 'profile_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -32,9 +35,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
 
   Future<void> _toggleOnline(bool value) async {
     setState(() => _isOnline = value);
-
     if (value) {
-      // Get location then go online
       try {
         LocationPermission permission = await Geolocator.checkPermission();
         if (permission == LocationPermission.denied) {
@@ -93,6 +94,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Could not accept job. Try again.'),
@@ -134,9 +136,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             _buildHeader(),
             _buildOnlineToggle(),
             Expanded(
-              child: _isOnline
-                  ? _buildJobList()
-                  : _buildOfflineState(),
+              child: _isOnline ? _buildJobList() : _buildOfflineState(),
             ),
           ],
         ),
@@ -173,31 +173,36 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             ],
           ),
           const Spacer(),
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFF1A1A1A),
-                child:
-                    const Icon(Icons.person, color: Color(0xFF888888)),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: _isOnline
-                        ? const Color(0xFF4CAF50)
-                        : const Color(0xFF555555),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: const Color(0xFF0D0D0D), width: 2),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
+            child: Stack(
+              children: [
+                const CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Color(0xFF1A1A1A),
+                  child: Icon(Icons.person, color: Color(0xFF888888)),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: _isOnline
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFF555555),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: const Color(0xFF0D0D0D), width: 2),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -280,7 +285,10 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                 color: Color(0xFF555555), size: 48),
             const SizedBox(height: 12),
             const Text('No nearby jobs right now',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             const Text('Check back soon or wait for new alerts',
                 style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
@@ -336,7 +344,18 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             itemCount: _nearbyJobs.length,
-            itemBuilder: (context, i) => _buildJobAlert(_nearbyJobs[i]),
+            itemBuilder: (context, i) {
+              final job = _nearbyJobs[i];
+              return GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => JobDetailScreen(job: job),
+                  ),
+                ),
+                child: _buildJobAlert(job),
+              );
+            },
           ),
         ),
       ],
@@ -482,8 +501,8 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
           Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A1A1A),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1A1A1A),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.wifi_off_rounded,
@@ -517,7 +536,20 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
       ),
       child: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: (i) {
+          setState(() => _currentIndex = i);
+          if (i == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MessagesScreen()),
+            );
+          } else if (i == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            );
+          }
+        },
         backgroundColor: Colors.transparent,
         selectedItemColor: const Color(0xFFFF6B00),
         unselectedItemColor: const Color(0xFF555555),
