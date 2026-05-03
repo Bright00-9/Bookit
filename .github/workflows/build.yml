@@ -27,12 +27,18 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Set up Gradle wrapper
+        run: |
+          cd moka/android
+          java -jar gradle/wrapper/gradle-wrapper.jar wrapper
+          cd ../..
+
       - name: Clean Gradle cache
         run: |
-          cd android
+          cd moka/android
           chmod +x gradlew
           ./gradlew clean
-          cd ..
+          cd ../..
 
       - name: Install dependencies
         run: flutter pub get
