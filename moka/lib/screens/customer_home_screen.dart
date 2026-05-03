@@ -4,6 +4,7 @@ import '../services/job_service.dart';
 import 'profile_screen.dart';
 import 'messages_screen.dart';
 import 'post_job_screen.dart';
+import 'rate_worker_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -462,6 +463,40 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 style: const TextStyle(
                     color: Color(0xFF555555), fontSize: 11),
               ),
+              if (status == 'completed') ...[
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RateWorkerScreen(
+                        jobId: job['id'],
+                        workerId: job['worker_id'] ?? '',
+                        workerName: job['worker_name'] ?? 'Worker',
+                        jobTitle: job['title'] ?? '',
+                      ),
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B00).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: const Color(0xFFFF6B00).withOpacity(0.4)),
+                    ),
+                    child: const Text(
+                      '⭐ Rate',
+                      style: TextStyle(
+                        color: Color(0xFFFF6B00),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ],

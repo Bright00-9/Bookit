@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import 'worker_reviews_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -503,6 +504,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Column(
         children: [
+          if (_profile?['role'] == 'worker') ...[
+            _buildSettingsTile(
+              icon: Icons.star_outline,
+              label: 'My Reviews',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WorkerReviewsScreen(
+                    workerId: _profile!['id'],
+                    workerName: _profile!['name'] ?? 'Worker',
+                    rating: (_profile!['rating'] ?? 0.0).toDouble(),
+                  ),
+                ),
+              ),
+            ),
+            _buildDivider(),
+          ],
           _buildSettingsTile(
             icon: Icons.notifications_outlined,
             label: 'Notifications',
