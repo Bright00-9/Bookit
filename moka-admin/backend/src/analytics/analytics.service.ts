@@ -15,6 +15,8 @@ export class AnalyticsService {
       { count: openJobs },
       { count: completedJobs },
       { count: onlineWorkers },
+      { count: totalRatings },
+      { data: revenueData },
     ] = await Promise.all([
       this.supabase.from('profiles').select('*', { count: 'exact', head: true }),
       this.supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'worker'),
@@ -23,7 +25,11 @@ export class AnalyticsService {
       this.supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'open'),
       this.supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
       this.supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_online', true),
+      this.supabase.from('ratings').select('*', { count: 'exact', head: true }),
+      this.supabase.from('payments').select('amount').eq('status', 'success'),
     ]);
+
+    const totalRevenue = revenueData?.reduce((sum, p) => sum + (p.amount || 0), 0) ?? 0;
 
     return {
       totalUsers,
@@ -33,6 +39,8 @@ export class AnalyticsService {
       openJobs,
       completedJobs,
       onlineWorkers,
+      totalRatings,
+      totalRevenue: totalRevenue.toFixed(2),
     };
   }
 

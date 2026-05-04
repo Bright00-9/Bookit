@@ -23,7 +23,7 @@ export class UsersService {
   async findOne(id: string) {
     const { data, error } = await this.supabase
       .from('profiles')
-      .select('*, jobs(count), job_applications(count)')
+      .select('*, jobs(count), job_applications(count), ratings!worker_id(stars, review, created_at)')
       .eq('id', id)
       .single();
     if (error || !data) throw new NotFoundException('User not found');

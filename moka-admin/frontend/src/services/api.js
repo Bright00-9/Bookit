@@ -40,6 +40,10 @@ export const updateJobStatus = (id, status) =>
   api.patch(`/jobs/${id}/status`, { status });
 export const deleteJob = (id) => api.delete(`/jobs/${id}`);
 
+// Payments
+export const getPayments = (params) => api.get('/payments', { params });
+export const getJobPayment = (jobId) => api.get(`/payments/job/${jobId}`);
+
 // Analytics
 export const getOverview = () => api.get('/analytics/overview');
 export const getJobsBySkill = () => api.get('/analytics/jobs-by-skill');

@@ -6,7 +6,7 @@ import {
 import {
   Users, Briefcase, TrendingUp, Wifi, LogOut, Menu, X,
   ChevronRight, Search, Filter, Trash2, Ban, CheckCircle,
-  Eye, AlertTriangle, Star, MapPin, Clock, RefreshCw,
+  Eye, AlertTriangle, Star, MapPin, Clock, RefreshCw, CreditCard,
 } from 'lucide-react';
 import * as api from './services/api';
 
@@ -234,6 +234,8 @@ const AnalyticsPage = () => {
         <StatCard icon={Briefcase} label="Total Jobs" value={overview?.totalJobs} color={C.yellow} />
         <StatCard icon={Briefcase} label="Open Jobs" value={overview?.openJobs} color={C.accent} />
         <StatCard icon={CheckCircle} label="Completed" value={overview?.completedJobs} color={C.green} />
+        <StatCard icon={Star} label="Total Reviews" value={overview?.totalRatings} color={C.yellow} />
+        <StatCard icon={TrendingUp} label="Revenue (GHS)" value={overview?.totalRevenue} color={C.green} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
@@ -436,6 +438,12 @@ const JobsPage = () => {
     { key: 'skill_needed', label: 'Skill', render: v => v ? <Badge color={C.blue}>{v}</Badge> : '—' },
     { key: 'urgency', label: 'Urgency', render: v => <Badge color={urgencyColor(v)}>{v}</Badge> },
     { key: 'status', label: 'Status', render: v => <Badge color={statusColor(v)}>{v}</Badge> },
+    { key: 'budget', label: 'Budget', render: v => v ? `GHS ${Number(v).toFixed(2)}` : '—' },
+    { key: 'payments', label: 'Payment', render: v => {
+      const p = Array.isArray(v) ? v[0] : null;
+      if (!p) return <Badge color={C.muted}>Unpaid</Badge>;
+      return <Badge color={p.status === 'success' ? C.green : C.yellow}>{p.status}</Badge>;
+    }},
     { key: 'created_at', label: 'Posted', render: v => timeAgo(v) },
     { key: 'id', label: 'Actions', render: (id, row) => (
       <div style={{ display: 'flex', gap: 6 }}>
@@ -588,11 +596,75 @@ const DetailRow = ({ label, value }) => (
   </div>
 );
 
+// ─── PAYMENTS PAGE ────────────────────────────────────────────────────────────
+const PaymentsPage = () => {
+  const [payments, setPayments] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.getPayments({ page, limit: 20 });
+      setPayments(res.data.data);
+      setTotal(res.data.total);
+    } catch {}
+    setLoading(false);
+  }, [page]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const cols = [
+    { key: 'jobs', label: 'Job', render: v => (
+      <div>
+        <div style={{ fontWeight: 600, color: C.text }}>{v?.title || '—'}</div>
+        <div style={{ fontSize: 11, color: C.muted }}>{v?.skill_needed}</div>
+      </div>
+    )},
+    { key: 'profiles', label: 'Customer', render: v => v?.name || '—' },
+    { key: 'amount', label: 'Amount', render: v => (
+      <span style={{ color: C.green, fontWeight: 700 }}>
+        GHS {Number(v || 0).toFixed(2)}
+      </span>
+    )},
+    { key: 'payment_method', label: 'Method', render: v => v
+      ? <Badge color={C.blue}>{v}</Badge>
+      : '—'
+    },
+    { key: 'status', label: 'Status', render: v => (
+      <Badge color={v === 'success' ? C.green : v === 'failed' ? C.red : C.yellow}>
+        {v}
+      </Badge>
+    )},
+    { key: 'paid_at', label: 'Paid At', render: v => v ? timeAgo(v) : '—' },
+    { key: 'paystack_reference', label: 'Reference', render: v => (
+      <span style={{ color: C.muted, fontSize: 11, fontFamily: 'monospace' }}>
+        {v?.substring(0, 20)}...
+      </span>
+    )},
+  ];
+
+  return (
+    <div>
+      <SectionHeader title="Payments" subtitle={`${fmt(total)} total transactions`} />
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+        <RefreshBtn onClick={load} />
+      </div>
+      <Card>
+        {loading ? <Loader /> : <Table cols={cols} rows={payments} />}
+      </Card>
+      <Pagination page={page} total={total} limit={20} onChange={setPage} />
+    </div>
+  );
+};
+
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 const NAV = [
   { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'jobs', label: 'Jobs', icon: Briefcase },
+  { id: 'payments', label: 'Payments', icon: CreditCard },
 ];
 
 const Sidebar = ({ active, onNav, admin, onLogout, collapsed, onToggle }) => (
@@ -668,7 +740,7 @@ export default function App() {
 
   if (!admin) return <LoginPage onLogin={setAdmin} />;
 
-  const pages = { analytics: <AnalyticsPage />, users: <UsersPage />, jobs: <JobsPage /> };
+  const pages = { analytics: <AnalyticsPage />, users: <UsersPage />, jobs: <JobsPage />, payments: <PaymentsPage /> };
 
   return (
     <div style={{ display: 'flex', background: C.bg, minHeight: '100vh', fontFamily: "'DM Sans', sans-serif", color: C.text }}>

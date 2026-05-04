@@ -9,7 +9,7 @@ export class JobsService {
   async findAll(status?: string, skill?: string, page = 1, limit = 20) {
     let query = this.supabase
       .from('jobs')
-      .select('*, profiles!customer_id(name, phone)', { count: 'exact' })
+      .select('*, profiles!customer_id(name, phone), payments(status, amount)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range((page - 1) * limit, page * limit - 1);
 
@@ -27,7 +27,9 @@ export class JobsService {
       .select(`
         *,
         profiles!customer_id(name, phone, email),
-        job_applications(*, profiles!worker_id(name, phone, skill, rating))
+        job_applications(*, profiles!worker_id(name, phone, skill, rating)),
+        payments(status, amount, payment_method, paid_at),
+        ratings(stars, review, profiles!customer_id(name))
       `)
       .eq('id', id)
       .single();

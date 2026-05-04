@@ -14,20 +14,14 @@ class AuthService {
     final response = await supabase.auth.signUp(
       email: email,
       password: password,
-    );
-
-    if (response.user != null) {
-      // Create profile
-      await supabase.from('profiles').insert({
-        'id': response.user!.id,
+      data: {        
         'name': name,
         'phone': phone,
         'role': role,
         'skill': skill,
-      });
-    }
-
-    return response;
+      },
+    );
+    return response; 
   }
 
   // Login
