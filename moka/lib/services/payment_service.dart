@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
 class PaymentService {
   // 🔁 Replace with your Paystack secret key
-  static const String _paystackSecretKey = 'sk_test_YOUR_PAYSTACK_SECRET_KEY';
+  static const String _paystackSecretKey = 'sk_test_4f08865d2c707cd6ff255399421a316411a4eaae';
   static const String _paystackBaseUrl = 'https://api.paystack.co';
 
   // Initialize a Paystack transaction
