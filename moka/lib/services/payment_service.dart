@@ -1,109 +1,67 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
 class PaymentService {
-  // 🔁 Replace with your Paystack secret key
-  static const String _paystackSecretKey = 'sk_test_4f08865d2c707cd6ff255399421a316411a4eaae';
-  static const String _paystackBaseUrl = 'https://api.paystack.co';
+  //static const String _backendUrl = 'http://10.0.2.2:3000'; // Android emulator
+  static const String _backendUrl = 'http://localhost:3000'; // iOS simulator
+  // static const String _backendUrl = 'https://your-backend.com'; // Production
 
-  // Initialize a Paystack transaction
+  // Get JWT token from Supabase session for backend auth
+  static String? get _token =>
+      Supabase.instance.client.auth.currentSession?.accessToken;
+
+  static Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      };
+
+  // Initialize payment via backend
   static Future<Map<String, dynamic>> initializePayment({
     required String jobId,
     required String workerId,
     required double amount,
     required String customerEmail,
   }) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) throw Exception('Not logged in');
-
-    // Generate unique reference
-    final reference =
-        'moka_${jobId.replaceAll('-', '').substring(0, 8)}_${DateTime.now().millisecondsSinceEpoch}';
-
-    // Create payment record in Supabase
-    await supabase.from('payments').insert({
-      'job_id': jobId,
-      'customer_id': user.id,
-      'worker_id': workerId,
-      'amount': amount,
-      'status': 'pending',
-      'paystack_reference': reference,
-    });
-
-    // Initialize with Paystack API
     final response = await http.post(
-      Uri.parse('$_paystackBaseUrl/transaction/initialize'),
-      headers: {
-        'Authorization': 'Bearer $_paystackSecretKey',
-        'Content-Type': 'application/json',
-      },
+      Uri.parse('$_backendUrl/payments/initialize'),
+      headers: _headers,
       body: jsonEncode({
-        'email': customerEmail,
-        'amount': (amount * 100).toInt(), // Paystack uses kobo/pesewas
-        'currency': 'GHS',
-        'reference': reference,
-        'metadata': {
-          'job_id': jobId,
-          'worker_id': workerId,
-          'custom_fields': [
-            {
-              'display_name': 'Job ID',
-              'variable_name': 'job_id',
-              'value': jobId,
-            }
-          ],
-        },
-        'channels': ['card', 'mobile_money'],
+        'jobId': jobId,
+        'workerId': workerId,
+        'amount': amount,
+        'customerEmail': customerEmail,
       }),
     );
 
     final data = jsonDecode(response.body);
-    if (!data['status']) {
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception(data['message'] ?? 'Failed to initialize payment');
     }
 
-    return {
-      'authorization_url': data['data']['authorization_url'],
-      'reference': reference,
-      'access_code': data['data']['access_code'],
-    };
+    return data;
   }
 
-  // Verify payment after redirect
+  // Verify payment via backend
   static Future<bool> verifyPayment(String reference) async {
-    final response = await http.get(
-      Uri.parse('$_paystackBaseUrl/transaction/verify/$reference'),
-      headers: {
-        'Authorization': 'Bearer $_paystackSecretKey',
-      },
+    final response = await http.post(
+      Uri.parse('$_backendUrl/payments/verify'),
+      headers: _headers,
+      body: jsonEncode({'reference': reference}),
     );
 
     final data = jsonDecode(response.body);
-    if (!data['status']) return false;
 
-    final transactionData = data['data'];
-    final isSuccess = transactionData['status'] == 'success';
-
-    if (isSuccess) {
-      // Update payment record in Supabase
-      await supabase.from('payments').update({
-        'status': 'success',
-        'paystack_transaction_id':
-            transactionData['id'].toString(),
-        'payment_method': transactionData['channel'],
-        'paid_at': DateTime.now().toIso8601String(),
-      }).eq('paystack_reference', reference);
-    } else {
-      await supabase.from('payments').update({
-        'status': 'failed',
-      }).eq('paystack_reference', reference);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(data['message'] ?? 'Failed to verify payment');
     }
 
-    return isSuccess;
+    return data['success'] == true;
   }
 
-  // Get payment for a job
+  // Get payment for a job (directly from Supabase — safe to read)
   static Future<Map<String, dynamic>?> getJobPayment(String jobId) async {
     final data = await supabase
         .from('payments')

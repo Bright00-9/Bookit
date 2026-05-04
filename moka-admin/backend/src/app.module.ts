@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { JobsModule } from './jobs/jobs.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { PaymentsModule } from './payments/payments.module';
 import { SupabaseModule } from './common/supabase.module';
 
 @Module({
@@ -14,6 +15,7 @@ import { SupabaseModule } from './common/supabase.module';
     UsersModule,
     JobsModule,
     AnalyticsModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}
