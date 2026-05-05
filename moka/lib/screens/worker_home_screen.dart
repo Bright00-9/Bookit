@@ -5,6 +5,7 @@ import '../services/job_service.dart';
 import 'job_detail_screen.dart';
 import 'messages_screen.dart';
 import 'profile_screen.dart';
+import 'worker_my_jobs_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -538,7 +539,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         currentIndex: _currentIndex,
         onTap: (i) {
           setState(() => _currentIndex = i);
-          if (i == 2) {
+          if (i == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const WorkerMyJobsScreen()),
+            );
+          } else if (i == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const MessagesScreen()),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/job_service.dart';
+import 'job_map_screen.dart';
 
 class JobDetailScreen extends StatefulWidget {
   final Map<String, dynamic> job;
@@ -411,7 +412,17 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         ),
         const SizedBox(height: 10),
         GestureDetector(
-          onTap: _isAccepted ? _openMaps : null,
+          onTap: _isAccepted
+              ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => JobMapScreen(
+                        job: widget.job,
+                        isWorker: true,
+                      ),
+                    ),
+                  )
+              : null,
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -442,7 +453,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     children: [
                       Text(
                         _isAccepted
-                            ? 'Tap to open in Google Maps'
+                            ? 'Tap to open live map'
                             : 'Accept job to see full location',
                         style: TextStyle(
                           color: _isAccepted
@@ -455,7 +466,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                       if (_lat != null)
                         Text(
                           _isAccepted
-                              ? '$_lat, $_lng'
+                              ? '${_lat?.toStringAsFixed(4)}, ${_lng?.toStringAsFixed(4)}'
                               : '📍 Location hidden until accepted',
                           style: const TextStyle(
                               color: Color(0xFF888888), fontSize: 12),
@@ -501,7 +512,15 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: _openMaps,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => JobMapScreen(
+                      job: widget.job,
+                      isWorker: true,
+                    ),
+                  ),
+                ),
                 icon: const Icon(Icons.navigation, size: 18),
                 label: const Text('Navigate'),
                 style: ElevatedButton.styleFrom(

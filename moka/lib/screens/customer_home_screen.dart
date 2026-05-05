@@ -6,6 +6,7 @@ import 'messages_screen.dart';
 import 'post_job_screen.dart';
 import 'rate_worker_screen.dart';
 import 'payment_screen.dart';
+import 'my_jobs_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -560,7 +561,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         currentIndex: _currentIndex,
         onTap: (i) {
           setState(() => _currentIndex = i);
-          if (i == 2) {
+          if (i == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyJobsScreen()),
+            );
+          } else if (i == 2) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const MessagesScreen()),
