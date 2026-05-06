@@ -78,16 +78,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     } finally {
       if (mounted) setState(() => _isAccepting = false);
     }
-  }
 
-  Future<void> _openMaps() async {
-    if (_lat == null || _lng == null) return;
-    final uri = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&destination=$_lat,$_lng&travelmode=driving');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
 
   Future<void> _callCustomer() async {
     if (_customerPhone.isEmpty) return;

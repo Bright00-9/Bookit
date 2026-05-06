@@ -34,8 +34,12 @@ async function sendPushNotification(
   fcmToken: string,
   title: string,
   body: string,
-  data: Record<string, string>
+  data: Record<string, string>,
+  urgency: string
 ) {
+  const isEmergency = urgency === 'emergency';
+  const isUrgent = urgency === 'urgent';
+
   const response = await fetch("https://fcm.googleapis.com/fcm/send", {
     method: "POST",
     headers: {
@@ -44,14 +48,54 @@ async function sendPushNotification(
     },
     body: JSON.stringify({
       to: fcmToken,
+      // ✅ Notification payload — shown by system when app is in background/killed
       notification: {
         title,
         body,
-        sound: "default",
-        android_channel_id: "moka_jobs",
+        sound: "notification_sound",   // matches res/raw/notification_sound.mp3
+        android_channel_id: isEmergency ? "moka_emergency" : "moka_jobs",
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
       },
-      data,
+      // ✅ Data payload — received in foreground for local notification
+      data: {
+        ...data,
+        click_action: "FLUTTER_NOTIFICATION_CLICK",
+      },
+      // ✅ Android specific config
+      android: {
+        priority: isEmergency ? "high" : "high",
+        notification: {
+          channel_id: isEmergency ? "moka_emergency" : "moka_jobs",
+          sound: "notification_sound",
+          default_vibrate_timings: false,
+          vibrate_timings: isEmergency
+            ? ["0s", "0.5s", "0.2s", "0.5s"]
+            : ["0s", "0.25s", "0.25s", "0.25s"],
+          notification_priority: isEmergency
+            ? "PRIORITY_MAX"
+            : "PRIORITY_HIGH",
+          visibility: "PUBLIC",  // show on lock screen
+          // ✅ Heads-up notification
+          notification_count: 1,
+        },
+      },
+      // ✅ APNs (iOS) config
+      apns: {
+        payload: {
+          aps: {
+            sound: "notification_sound.mp3",
+            badge: 1,
+            "interruption-level": isEmergency ? "critical" : "active",
+          },
+        },
+        headers: {
+          "apns-priority": "10",  // 10 = immediate
+          "apns-push-type": "alert",
+        },
+      },
       priority: "high",
+      content_available: true,  // wake up app even when killed (iOS)
+      mutable_content: true,
     }),
   });
   return response.json();
@@ -139,7 +183,8 @@ serve(async (req) => {
             skill: skill_needed,
             urgency: urgency,
             type: "new_job",
-          }
+          },
+          urgency
         )
       )
     );

@@ -6,6 +6,7 @@ import 'job_detail_screen.dart';
 import 'messages_screen.dart';
 import 'profile_screen.dart';
 import 'worker_my_jobs_screen.dart';
+import 'create_portfolio_post_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -143,6 +144,18 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomNav(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => const CreatePortfolioPostScreen()),
+        ),
+        backgroundColor: const Color(0xFFFF6B00),
+        icon: const Icon(Icons.add_photo_alternate, color: Colors.white),
+        label: const Text('Share Work',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700)),
+      ),
     );
   }
 
