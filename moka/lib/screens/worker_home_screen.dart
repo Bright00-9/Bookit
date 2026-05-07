@@ -7,6 +7,8 @@ import 'messages_screen.dart';
 import 'profile_screen.dart';
 import 'worker_my_jobs_screen.dart';
 import 'create_portfolio_post_screen.dart';
+import 'public_profile_screen.dart';
+import 'post_detail_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -503,6 +505,156 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+    Widget _buildFeedCard(Map<String, dynamic> post) {
+    final worker = post['profiles'] as Map<String, dynamic>?;
+    final workerName = worker?['name'] ?? 'Worker';
+    final workerSkill = worker?['skill'] ?? '';
+    final workerId = worker?['id'];
+    final avatarUrl = worker?['avatar_url'];
+    final likesCount = post['likes_count'] ?? 0;
+    final commentsCount = post['comments_count'] ?? 0;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => PostDetailScreen(post: post)),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF2A2A2A)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Worker header
+            GestureDetector(
+              onTap: () {
+                if (workerId != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          PublicProfileScreen(userId: workerId),
+                    ),
+                  );
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor:
+                          const Color(0xFFFF6B00).withOpacity(0.15),
+                      backgroundImage: avatarUrl != null
+                          ? NetworkImage(avatarUrl)
+                          : null,
+                      child: avatarUrl == null
+                          ? Text(workerName[0].toUpperCase(),
+                              style: const TextStyle(
+                                  color: Color(0xFFFF6B00),
+                                  fontWeight: FontWeight.w700))
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(workerName,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13)),
+                        Text(workerSkill,
+                            style: const TextStyle(
+                                color: Color(0xFF888888),
+                                fontSize: 11)),
+                      ],
+                    ),
+                    const Spacer(),
+                    if (post['skill'] != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFFFF6B00).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(post['skill'],
+                            style: const TextStyle(
+                                color: Color(0xFFFF6B00),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Image
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(),
+              child: Image.network(
+                post['image_url'],
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 200,
+                  color: const Color(0xFF252525),
+                  child: const Icon(Icons.image_not_supported,
+                      color: Color(0xFF555555), size: 40),
+                ),
+              ),
+            ),
+
+            // Caption + likes
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (post['caption'] != null)
+                    Text(
+                      post['caption'],
+                      style: const TextStyle(
+                          color: Color(0xFFCCCCCC), fontSize: 13),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.favorite_border_rounded,
+                          color: Color(0xFF888888), size: 18),
+                      const SizedBox(width: 4),
+                      Text('$likesCount',
+                          style: const TextStyle(
+                              color: Color(0xFF888888), fontSize: 12)),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.chat_bubble_outline,
+                          color: Color(0xFF888888), size: 16),
+                      const SizedBox(width: 4),
+                      Text('$commentsCount',
+                          style: const TextStyle(
+                              color: Color(0xFF888888), fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
