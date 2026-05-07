@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/job_service.dart';
 import 'job_map_screen.dart';
 
+
 class JobDetailScreen extends StatefulWidget {
   final Map<String, dynamic> job;
 
@@ -78,7 +79,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     } finally {
       if (mounted) setState(() => _isAccepting = false);
     }
-
+  }
 
   Future<void> _callCustomer() async {
     if (_customerPhone.isEmpty) return;
@@ -582,4 +583,5 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       ),
     );
   }
+  
 }
