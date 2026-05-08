@@ -3,7 +3,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/job_service.dart';
 import 'job_map_screen.dart';
 
-
 class JobDetailScreen extends StatefulWidget {
   final Map<String, dynamic> job;
 
@@ -58,7 +57,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Job accepted! Head to the customer location.'),
+          content: const Text('Applied! Wait for the customer to accept you.'),
           backgroundColor: const Color(0xFF4CAF50),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -69,7 +68,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Could not accept job. Try again.'),
+          content: Text(e.toString().replaceAll('Exception: ', '')),
           backgroundColor: const Color(0xFFE53935),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -78,8 +77,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       );
     } finally {
       if (mounted) setState(() => _isAccepting = false);
-    }
+    }         
   }
+
 
   Future<void> _callCustomer() async {
     if (_customerPhone.isEmpty) return;
@@ -573,7 +573,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           color: Colors.white, strokeWidth: 2.5),
                     )
                   : const Text(
-                      'Accept Job',
+                      'Apply for Job',
                       style: TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w700),
                     ),
@@ -583,5 +583,4 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       ),
     );
   }
-  
 }

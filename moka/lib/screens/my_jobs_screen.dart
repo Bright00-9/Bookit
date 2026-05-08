@@ -3,6 +3,7 @@ import '../services/job_service.dart';
 import 'post_job_screen.dart';
 import 'payment_screen.dart';
 import 'rate_worker_screen.dart';
+import 'job_applicants_screen.dart';
 
 class MyJobsScreen extends StatefulWidget {
   const MyJobsScreen({super.key});
@@ -36,7 +37,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       final jobs = await JobService.getMyJobs();
       if (mounted) setState(() => _allJobs = jobs);
     } catch (e) {
-      debugPrint('Error loading jobs: $e');
+      debugPrint('Error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -44,10 +45,8 @@ class _MyJobsScreenState extends State<MyJobsScreen>
 
   List<Map<String, dynamic>> get _openJobs =>
       _allJobs.where((j) => j['status'] == 'open').toList();
-
   List<Map<String, dynamic>> get _activeJobs =>
       _allJobs.where((j) => j['status'] == 'accepted').toList();
-
   List<Map<String, dynamic>> get _completedJobs =>
       _allJobs.where((j) => j['status'] == 'completed').toList();
 
@@ -59,6 +58,79 @@ class _MyJobsScreenState extends State<MyJobsScreen>
     if (diff.inHours < 24) return '${diff.inHours} hrs ago';
     if (diff.inDays == 1) return 'Yesterday';
     return '${diff.inDays} days ago';
+  }
+
+  Future<void> _markComplete(Map<String, dynamic> job) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Mark as Complete',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700)),
+        content: const Text(
+          'Is the job done? This will move it to completed and prompt payment.',
+          style: TextStyle(color: Color(0xFF888888)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not yet',
+                style: TextStyle(color: Color(0xFF888888))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6B00),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Yes, complete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await JobService.completeJob(job['id']);
+      await _loadJobs();
+
+      if (!mounted) return;
+
+      // Switch to Done tab
+      _tabController.animateTo(2);
+
+      // Navigate to payment
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentScreen(
+            jobId: job['id'],
+            workerId: job['accepted_worker_id'] ?? '',
+            workerName: job['worker_name'] ?? 'Worker',
+            jobTitle: job['title'] ?? '',
+            amount: (job['budget'] as num?)?.toDouble() ?? 0,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to complete job. Try again.'),
+          backgroundColor: const Color(0xFFE53935),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 
   @override
@@ -73,13 +145,11 @@ class _MyJobsScreenState extends State<MyJobsScreen>
           icon: const Icon(Icons.arrow_back_ios_new,
               color: Colors.white, size: 20),
         ),
-        title: const Text(
-          'My Jobs',
-          style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 20),
-        ),
+        title: const Text('My Jobs',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 20)),
         actions: [
           IconButton(
             onPressed: _loadJobs,
@@ -92,8 +162,8 @@ class _MyJobsScreenState extends State<MyJobsScreen>
           indicatorWeight: 3,
           labelColor: const Color(0xFFFF6B00),
           unselectedLabelColor: const Color(0xFF555555),
-          labelStyle: const TextStyle(
-              fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle:
+              const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
           tabs: [
             Tab(text: 'Open (${_openJobs.length})'),
             Tab(text: 'Active (${_activeJobs.length})'),
@@ -107,9 +177,9 @@ class _MyJobsScreenState extends State<MyJobsScreen>
           : TabBarView(
               controller: _tabController,
               children: [
-                _buildJobList(_openJobs, 'open'),
-                _buildJobList(_activeJobs, 'accepted'),
-                _buildJobList(_completedJobs, 'completed'),
+                _buildList(_openJobs, 'open'),
+                _buildList(_activeJobs, 'accepted'),
+                _buildList(_completedJobs, 'completed'),
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
@@ -129,16 +199,16 @@ class _MyJobsScreenState extends State<MyJobsScreen>
     );
   }
 
-  Widget _buildJobList(List<Map<String, dynamic>> jobs, String status) {
+  Widget _buildList(List<Map<String, dynamic>> jobs, String type) {
     if (jobs.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              status == 'open'
+              type == 'open'
                   ? Icons.work_outline
-                  : status == 'accepted'
+                  : type == 'accepted'
                       ? Icons.handyman_outlined
                       : Icons.check_circle_outline,
               color: const Color(0xFF555555),
@@ -146,11 +216,11 @@ class _MyJobsScreenState extends State<MyJobsScreen>
             ),
             const SizedBox(height: 12),
             Text(
-              status == 'open'
+              type == 'open'
                   ? 'No open jobs'
-                  : status == 'accepted'
+                  : type == 'accepted'
                       ? 'No active jobs'
-                      : 'No completed jobs',
+                      : 'No completed jobs yet',
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -158,11 +228,11 @@ class _MyJobsScreenState extends State<MyJobsScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              status == 'open'
+              type == 'open'
                   ? 'Post a job to get started'
-                  : status == 'accepted'
-                      ? 'Accept a worker to get started'
-                      : 'Completed jobs will appear here',
+                  : type == 'accepted'
+                      ? 'Accept a worker from Open jobs'
+                      : 'Completed jobs appear here',
               style: const TextStyle(
                   color: Color(0xFF888888), fontSize: 13),
             ),
@@ -178,22 +248,23 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       child: ListView.builder(
         padding: const EdgeInsets.all(20),
         itemCount: jobs.length,
-        itemBuilder: (context, i) => _buildJobCard(jobs[i]),
+        itemBuilder: (context, i) => _buildCard(jobs[i], type),
       ),
     );
   }
 
-  Widget _buildJobCard(Map<String, dynamic> job) {
+  Widget _buildCard(Map<String, dynamic> job, String type) {
     final status = job['status'] ?? 'open';
     final urgency = job['urgency'] ?? 'normal';
-
-    Color urgencyColor = const Color(0xFF4CAF50);
-    if (urgency == 'urgent') urgencyColor = const Color(0xFFFF9800);
-    if (urgency == 'emergency') urgencyColor = const Color(0xFFF44336);
+    final budget = (job['budget'] as num?)?.toDouble() ?? 0;
 
     Color statusColor = const Color(0xFFFF6B00);
     if (status == 'accepted') statusColor = const Color(0xFF4CAF50);
     if (status == 'completed') statusColor = const Color(0xFF888888);
+
+    Color urgencyColor = const Color(0xFF4CAF50);
+    if (urgency == 'urgent') urgencyColor = const Color(0xFFFF9800);
+    if (urgency == 'emergency') urgencyColor = const Color(0xFFF44336);
 
     int applicants = 0;
     final appData = job['job_applications'];
@@ -220,166 +291,219 @@ class _MyJobsScreenState extends State<MyJobsScreen>
           // Header
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.work_outline,
-                      color: statusColor, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        job['title'] ?? '',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
+                // Status + urgency row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _timeAgo(job['created_at']),
-                        style: const TextStyle(
-                            color: Color(0xFF555555), fontSize: 12),
+                      child: Text(
+                        status == 'open'
+                            ? '📋 Open'
+                            : status == 'accepted'
+                                ? '🔨 Active'
+                                : '✅ Done',
+                        style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700),
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    status == 'open'
-                        ? 'Open'
-                        : status == 'accepted'
-                            ? 'Active'
-                            : 'Done',
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: urgencyColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(urgency,
+                          style: TextStyle(
+                              color: urgencyColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    const Spacer(),
+                    Text(_timeAgo(job['created_at']),
+                        style: const TextStyle(
+                            color: Color(0xFF555555), fontSize: 11)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Title
+                Text(job['title'] ?? '',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+
+                // Chips row
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _chip(Icons.build_outlined,
+                        job['skill_needed'] ?? '', const Color(0xFFFF6B00)),
+                    if (budget > 0)
+                      _chip(Icons.payments_outlined,
+                          'GHS ${budget.toStringAsFixed(2)}',
+                          const Color(0xFF4CAF50)),
+                    if (status == 'open')
+                      _chip(Icons.people_outline, '$applicants applied',
+                          const Color(0xFF888888)),
+                  ],
                 ),
               ],
             ),
           ),
 
-          // Details
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildChip(Icons.build_outlined,
-                    job['skill_needed'] ?? '', const Color(0xFFFF6B00)),
-                _buildChip(Icons.flash_on_outlined, urgency,
-                    urgencyColor),
-                if (job['budget'] != null && job['budget'] > 0)
-                  _buildChip(Icons.payments_outlined,
-                      'GHS ${(job['budget'] as num).toStringAsFixed(2)}',
-                      const Color(0xFF4CAF50)),
-                _buildChip(Icons.people_outline,
-                    '$applicants applied', const Color(0xFF888888)),
-              ],
+          // Action footer
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFF2A2A2A))),
             ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: _buildActions(job, status, applicants),
           ),
-
-          // Action buttons for completed jobs
-          if (status == 'completed') ...[
-            const SizedBox(height: 14),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Divider(color: Color(0xFF2A2A2A)),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PaymentScreen(
-                            jobId: job['id'],
-                            workerId: job['worker_id'] ?? '',
-                            workerName: job['worker_name'] ?? 'Worker',
-                            jobTitle: job['title'] ?? '',
-                            amount: (job['budget'] as num?)
-                                    ?.toDouble() ??
-                                0,
-                          ),
-                        ),
-                      ),
-                      icon: const Icon(Icons.payment, size: 16),
-                      label: const Text('Pay'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF4CAF50),
-                        side: const BorderSide(
-                            color: Color(0xFF4CAF50)),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RateWorkerScreen(
-                            jobId: job['id'],
-                            workerId: job['worker_id'] ?? '',
-                            workerName: job['worker_name'] ?? 'Worker',
-                            jobTitle: job['title'] ?? '',
-                          ),
-                        ),
-                      ),
-                      icon: const Icon(Icons.star, size: 16),
-                      label: const Text('Rate'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF6B00),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else
-            const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  Widget _buildChip(IconData icon, String label, Color color) {
+  Widget _buildActions(
+      Map<String, dynamic> job, String status, int applicants) {
+    if (status == 'open') {
+      // Show View Applicants button
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: () async {
+            final accepted = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => JobApplicantsScreen(
+                  jobId: job['id'],
+                  jobTitle: job['title'] ?? '',
+                ),
+              ),
+            );
+            if (accepted == true) _loadJobs();
+          },
+          icon: const Icon(Icons.people, size: 18),
+          label: Text(applicants == 0
+              ? 'Waiting for applicants...'
+              : 'Review $applicants Applicant${applicants == 1 ? '' : 's'}'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: applicants == 0
+                ? const Color(0xFF252525)
+                : const Color(0xFFFF6B00),
+            foregroundColor:
+                applicants == 0 ? const Color(0xFF888888) : Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            elevation: 0,
+          ),
+        ),
+      );
+    }
+
+    if (status == 'accepted') {
+      // Show Job Complete button
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: () => _markComplete(job),
+          icon: const Icon(Icons.check_circle_outline, size: 18),
+          label: const Text('Mark Job as Complete'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF4CAF50),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            elevation: 0,
+            textStyle: const TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+        ),
+      );
+    }
+
+    if (status == 'completed') {
+      // Show Pay + Rate buttons
+      return Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PaymentScreen(
+                    jobId: job['id'],
+                    workerId: job['accepted_worker_id'] ?? '',
+                    workerName: job['worker_name'] ?? 'Worker',
+                    jobTitle: job['title'] ?? '',
+                    amount: (job['budget'] as num?)?.toDouble() ?? 0,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.payment, size: 16),
+              label: const Text('Pay'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF4CAF50),
+                side: const BorderSide(color: Color(0xFF4CAF50)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RateWorkerScreen(
+                    jobId: job['id'],
+                    workerId: job['accepted_worker_id'] ?? '',
+                    workerName: job['worker_name'] ?? 'Worker',
+                    jobTitle: job['title'] ?? '',
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.star, size: 16),
+              label: const Text('Rate'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B00),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _chip(IconData icon, String label, Color color) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),

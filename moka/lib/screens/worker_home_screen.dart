@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/auth_service.dart';
 import '../services/job_service.dart';
+import '../services/portfolio_service.dart';
 import 'job_detail_screen.dart';
 import 'messages_screen.dart';
 import 'profile_screen.dart';
 import 'worker_my_jobs_screen.dart';
 import 'create_portfolio_post_screen.dart';
-import 'public_profile_screen.dart';
 import 'post_detail_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
@@ -17,24 +17,61 @@ class WorkerHomeScreen extends StatefulWidget {
   State<WorkerHomeScreen> createState() => _WorkerHomeScreenState();
 }
 
-class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
+class _WorkerHomeScreenState extends State<WorkerHomeScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   bool _isOnline = false;
   int _currentIndex = 0;
   List<Map<String, dynamic>> _nearbyJobs = [];
+  List<Map<String, dynamic>> _feedPosts = [];
+  List<Map<String, dynamic>> _myPosts = [];
   Map<String, dynamic>? _profile;
   bool _isLoadingJobs = false;
+  bool _isLoadingFeed = false;
   double? _lat;
   double? _lng;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _loadProfile();
+    _loadFeed();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadFeed() async {
+    setState(() => _isLoadingFeed = true);
+    try {
+      final posts = await PortfolioService.getFeedPosts();
+      if (mounted) setState(() => _feedPosts = posts);
+    } catch (e) {
+      debugPrint('Error loading feed: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingFeed = false);
+    }
+  }
+
+  Future<void> _loadMyPosts() async {
+    try {
+      final userId = _profile?['id'];
+      if (userId == null) return;
+      final posts = await PortfolioService.getWorkerPosts(userId);
+      if (mounted) setState(() => _myPosts = posts);
+    } catch (e) {
+      debugPrint('Error loading my posts: $e');
+    }
   }
 
   Future<void> _loadProfile() async {
     final profile = await AuthService.getCurrentProfile();
-    setState(() => _profile = profile);
+    if (mounted) setState(() => _profile = profile);
+    _loadMyPosts();
   }
 
   Future<void> _toggleOnline(bool value) async {
@@ -83,14 +120,14 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
     }
   }
 
-  Future<void> _acceptJob(String jobId) async {
+  Future<void> _applyToJob(String jobId) async {
     try {
       await JobService.applyToJob(jobId);
       setState(() => _nearbyJobs.removeWhere((j) => j['id'] == jobId));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Job accepted! Head to the customer location.'),
+          content: const Text('Applied! Wait for the customer to accept you.'),
           backgroundColor: const Color(0xFF4CAF50),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -101,7 +138,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Could not accept job. Try again.'),
+          content: const Text('Could not apply to job. Try again.'),
           backgroundColor: const Color(0xFFE53935),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -139,19 +176,83 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
           children: [
             _buildHeader(),
             _buildOnlineToggle(),
+            // Tab bar
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: Color(0xFF1F1F1F))),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicatorColor: const Color(0xFFFF6B00),
+                indicatorWeight: 3,
+                labelColor: const Color(0xFFFF6B00),
+                unselectedLabelColor: const Color(0xFF555555),
+                labelStyle: const TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 13),
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.work_outline, size: 16),
+                        const SizedBox(width: 5),
+                        Text('Jobs (${_nearbyJobs.length})'),
+                      ],
+                    ),
+                  ),
+                  const Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.photo_library_outlined, size: 16),
+                        SizedBox(width: 5),
+                        Text('Feed'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.grid_on, size: 16),
+                        const SizedBox(width: 5),
+                        Text('My Posts (${_myPosts.length})'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
-              child: _isOnline ? _buildJobList() : _buildOfflineState(),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Tab 1: Nearby Jobs
+                  _isOnline ? _buildJobList() : _buildOfflineState(),
+                  // Tab 2: Feed
+                  _buildFeedTab(),
+                  // Tab 3: My Posts
+                  _buildMyPostsTab(),
+                ],
+              ),
             ),
           ],
         ),
       ),
       bottomNavigationBar: _buildBottomNav(),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => const CreatePortfolioPostScreen()),
-        ),
+        onPressed: () async {
+          final posted = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const CreatePortfolioPostScreen()),
+          );
+          if (posted == true) {
+            _loadFeed();
+            _loadMyPosts();
+          }
+        },
         backgroundColor: const Color(0xFFFF6B00),
         icon: const Icon(Icons.add_photo_alternate, color: Colors.white),
         label: const Text('Share Work',
@@ -160,6 +261,471 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
       ),
     );
   }
+
+  // ─── Feed Tab ──────────────────────────────────────────────────────────────
+  Widget _buildFeedTab() {
+    if (_isLoadingFeed) {
+      return const Center(
+          child: CircularProgressIndicator(color: Color(0xFFFF6B00)));
+    }
+    if (_feedPosts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.photo_library_outlined,
+                color: Color(0xFF555555), size: 48),
+            const SizedBox(height: 12),
+            const Text('No posts yet',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            const Text('Be the first to share your work!',
+                style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: _loadFeed,
+              icon: const Icon(Icons.refresh, color: Color(0xFFFF6B00)),
+              label: const Text('Refresh',
+                  style: TextStyle(color: Color(0xFFFF6B00))),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: const Color(0xFFFF6B00),
+      backgroundColor: const Color(0xFF1A1A1A),
+      onRefresh: _loadFeed,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _feedPosts.length,
+        itemBuilder: (context, i) => _buildFeedCard(_feedPosts[i]),
+      ),
+    );
+  }
+
+  Widget _buildFeedCard(Map<String, dynamic> post) {
+    final worker = post['profiles'] as Map<String, dynamic>?;
+    final workerName = worker?['name'] ?? 'Worker';
+    final workerSkill = worker?['skill'] ?? '';
+    final avatarUrl = worker?['avatar_url'];
+    final likesCount = post['likes_count'] ?? 0;
+    final commentsCount = post['comments_count'] ?? 0;
+    final isMyPost = worker?['id'] == _profile?['id'];
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
+      ).then((_) => _loadFeed()),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isMyPost
+                ? const Color(0xFFFF6B00).withOpacity(0.3)
+                : const Color(0xFF2A2A2A),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor:
+                        const Color(0xFFFF6B00).withOpacity(0.15),
+                    backgroundImage: avatarUrl != null
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl == null
+                        ? Text(workerName[0].toUpperCase(),
+                            style: const TextStyle(
+                                color: Color(0xFFFF6B00),
+                                fontWeight: FontWeight.w700))
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(workerName,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13)),
+                            if (isMyPost) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF6B00)
+                                      .withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text('You',
+                                    style: TextStyle(
+                                        color: Color(0xFFFF6B00),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                            ],
+                          ],
+                        ),
+                        Text(workerSkill,
+                            style: const TextStyle(
+                                color: Color(0xFF888888), fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  if (post['skill'] != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B00).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(post['skill'],
+                          style: const TextStyle(
+                              color: Color(0xFFFF6B00),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                ],
+              ),
+            ),
+
+            // Image
+            ClipRRect(
+              child: Image.network(
+                post['image_url'],
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 200,
+                  color: const Color(0xFF252525),
+                  child: const Icon(Icons.image_not_supported,
+                      color: Color(0xFF555555), size: 40),
+                ),
+              ),
+            ),
+
+            // Caption + actions
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (post['caption'] != null)
+                    Text(post['caption'],
+                        style: const TextStyle(
+                            color: Color(0xFFCCCCCC), fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.favorite_border_rounded,
+                          color: Color(0xFF888888), size: 18),
+                      const SizedBox(width: 4),
+                      Text('$likesCount',
+                          style: const TextStyle(
+                              color: Color(0xFF888888), fontSize: 12)),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.chat_bubble_outline,
+                          color: Color(0xFF888888), size: 16),
+                      const SizedBox(width: 4),
+                      Text('$commentsCount',
+                          style: const TextStyle(
+                              color: Color(0xFF888888), fontSize: 12)),
+                      const Spacer(),
+                      const Text('Tap to view',
+                          style: TextStyle(
+                              color: Color(0xFF555555), fontSize: 11)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── My Posts Tab ──────────────────────────────────────────────────────────
+  Widget _buildMyPostsTab() {
+    if (_myPosts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.grid_on,
+                color: Color(0xFF555555), size: 48),
+            const SizedBox(height: 12),
+            const Text("You haven't posted yet",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            const Text('Tap Share Work to post your first photo!',
+                style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      color: const Color(0xFFFF6B00),
+      backgroundColor: const Color(0xFF1A1A1A),
+      onRefresh: _loadMyPosts,
+      child: CustomScrollView(
+        slivers: [
+          // Stats bar
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF2A2A2A)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildMiniStat(
+                      '${_myPosts.length}', 'Posts'),
+                  _buildStatDivider(),
+                  _buildMiniStat(
+                    '${_myPosts.fold(0, (sum, p) => sum + (p['likes_count'] as int? ?? 0))}',
+                    'Total Likes',
+                  ),
+                  _buildStatDivider(),
+                  _buildMiniStat(
+                    '${_myPosts.fold(0, (sum, p) => sum + (p['comments_count'] as int? ?? 0))}',
+                    'Comments',
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Grid
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (context, i) => _buildMyPostThumbnail(_myPosts[i]),
+                childCount: _myPosts.length,
+              ),
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 3,
+                mainAxisSpacing: 3,
+              ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyPostThumbnail(Map<String, dynamic> post) {
+    final likesCount = post['likes_count'] ?? 0;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
+      ).then((_) => _loadMyPosts()),
+      onLongPress: () => _showDeleteDialog(post),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            post['image_url'],
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: const Color(0xFF1A1A1A),
+              child: const Icon(Icons.image_not_supported,
+                  color: Color(0xFF555555)),
+            ),
+          ),
+          // Likes overlay
+          Positioned(
+            bottom: 4,
+            left: 4,
+            child: Row(
+              children: [
+                const Icon(Icons.favorite_rounded,
+                    color: Colors.white, size: 12),
+                const SizedBox(width: 2),
+                Text('$likesCount',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        shadows: [
+                          Shadow(color: Colors.black, blurRadius: 4)
+                        ])),
+              ],
+            ),
+          ),
+          // Long press hint
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Icon(Icons.more_vert,
+                  color: Colors.white, size: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(Map<String, dynamic> post) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A2A),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Post preview
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(post['image_url'],
+                  height: 80, width: 80, fit: BoxFit.cover),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              post['caption'] ?? 'This post',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 20),
+            // View option
+            ListTile(
+              leading: const Icon(Icons.visibility_outlined,
+                  color: Colors.white),
+              title: const Text('View Post',
+                  style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => PostDetailScreen(post: post)),
+                ).then((_) => _loadMyPosts());
+              },
+            ),
+            // Delete option
+            ListTile(
+              leading: const Icon(Icons.delete_outline,
+                  color: Color(0xFFE53935)),
+              title: const Text('Delete Post',
+                  style: TextStyle(color: Color(0xFFE53935))),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _deletePost(post['id']);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deletePost(String postId) async {
+    try {
+      await PortfolioService.deletePost(postId);
+      _loadMyPosts();
+      _loadFeed();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Post deleted'),
+          backgroundColor: const Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to delete post'),
+          backgroundColor: const Color(0xFFE53935),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  Widget _buildMiniStat(String value, String label) {
+    return Column(
+      children: [
+        Text(value,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
+        Text(label,
+            style: const TextStyle(
+                color: Color(0xFF888888), fontSize: 11)),
+      ],
+    );
+  }
+
+  Widget _buildStatDivider() =>
+      Container(width: 1, height: 32, color: const Color(0xFF2A2A2A));
 
   Widget _buildHeader() {
     final name = _profile?['name'] ?? 'Worker';
@@ -488,7 +1054,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: () => _acceptJob(job['id']),
+                  onPressed: () => _applyToJob(job['id']),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6B00),
                     foregroundColor: Colors.white,
@@ -497,7 +1063,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     elevation: 0,
                   ),
-                  child: const Text('Accept Job',
+                  child: const Text('Apply for Job',
                       style: TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w700)),
                 ),
@@ -505,156 +1071,6 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen> {
             ],
           ),
         ],
-      ),
-    );
-  }
-
-    Widget _buildFeedCard(Map<String, dynamic> post) {
-    final worker = post['profiles'] as Map<String, dynamic>?;
-    final workerName = worker?['name'] ?? 'Worker';
-    final workerSkill = worker?['skill'] ?? '';
-    final workerId = worker?['id'];
-    final avatarUrl = worker?['avatar_url'];
-    final likesCount = post['likes_count'] ?? 0;
-    final commentsCount = post['comments_count'] ?? 0;
-
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => PostDetailScreen(post: post)),
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF2A2A2A)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Worker header
-            GestureDetector(
-              onTap: () {
-                if (workerId != null) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          PublicProfileScreen(userId: workerId),
-                    ),
-                  );
-                }
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor:
-                          const Color(0xFFFF6B00).withOpacity(0.15),
-                      backgroundImage: avatarUrl != null
-                          ? NetworkImage(avatarUrl)
-                          : null,
-                      child: avatarUrl == null
-                          ? Text(workerName[0].toUpperCase(),
-                              style: const TextStyle(
-                                  color: Color(0xFFFF6B00),
-                                  fontWeight: FontWeight.w700))
-                          : null,
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(workerName,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13)),
-                        Text(workerSkill,
-                            style: const TextStyle(
-                                color: Color(0xFF888888),
-                                fontSize: 11)),
-                      ],
-                    ),
-                    const Spacer(),
-                    if (post['skill'] != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color:
-                              const Color(0xFFFF6B00).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(post['skill'],
-                            style: const TextStyle(
-                                color: Color(0xFFFF6B00),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(),
-              child: Image.network(
-                post['image_url'],
-                width: double.infinity,
-                height: 200,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 200,
-                  color: const Color(0xFF252525),
-                  child: const Icon(Icons.image_not_supported,
-                      color: Color(0xFF555555), size: 40),
-                ),
-              ),
-            ),
-
-            // Caption + likes
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (post['caption'] != null)
-                    Text(
-                      post['caption'],
-                      style: const TextStyle(
-                          color: Color(0xFFCCCCCC), fontSize: 13),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.favorite_border_rounded,
-                          color: Color(0xFF888888), size: 18),
-                      const SizedBox(width: 4),
-                      Text('$likesCount',
-                          style: const TextStyle(
-                              color: Color(0xFF888888), fontSize: 12)),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.chat_bubble_outline,
-                          color: Color(0xFF888888), size: 16),
-                      const SizedBox(width: 4),
-                      Text('$commentsCount',
-                          style: const TextStyle(
-                              color: Color(0xFF888888), fontSize: 12)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
