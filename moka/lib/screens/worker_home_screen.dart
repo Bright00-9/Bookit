@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/job_service.dart';
 import '../services/portfolio_service.dart';
@@ -30,6 +32,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   bool _isLoadingFeed = false;
   double? _lat;
   double? _lng;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -37,11 +40,19 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     _tabController = TabController(length: 3, vsync: this);
     _loadProfile();
     _loadFeed();
+    // Auto-refresh every 15 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!mounted) return;
+      _loadFeed();
+      if (_isOnline) _loadNearbyJobs();
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _refreshTimer?.cancel();
+    _jobsChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -68,10 +79,24 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     }
   }
 
+  RealtimeChannel? _jobsChannel;
+
   Future<void> _loadProfile() async {
     final profile = await AuthService.getCurrentProfile();
     if (mounted) setState(() => _profile = profile);
     _loadMyPosts();
+    // Subscribe to new open jobs in realtime
+    _jobsChannel = Supabase.instance.client
+        .channel('new_open_jobs')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'jobs',
+          callback: (_) {
+            if (_isOnline && mounted) _loadNearbyJobs();
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _toggleOnline(bool value) async {

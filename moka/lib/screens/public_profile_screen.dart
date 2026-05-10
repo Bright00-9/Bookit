@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/portfolio_service.dart';
 import 'worker_reviews_screen.dart';
 import 'post_detail_screen.dart';
+import 'chat_screen.dart';
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -17,10 +19,66 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   List<Map<String, dynamic>> _posts = [];
   bool _isLoading = true;
 
+  final _supabase = Supabase.instance.client;
+
   @override
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  Future<void> _startChat() async {
+    try {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null) return;
+      if (currentUserId == widget.userId) return; // can't chat with yourself
+
+      // Check existing conversation
+      final existing = await _supabase
+          .from('conversations')
+          .select('id')
+          .or('and(customer_id.eq.$currentUserId,worker_id.eq.${widget.userId}),and(customer_id.eq.${widget.userId},worker_id.eq.$currentUserId)')
+          .maybeSingle();
+
+      if (existing != null) {
+        if (!mounted) return;
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => ChatScreen(
+              conversationId: existing['id'],
+              jobTitle: 'Direct Message'),
+        ));
+        return;
+      }
+
+      // Get role to assign customer/worker correctly
+      final myProfile = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', currentUserId)
+          .single();
+
+      final myRole = myProfile['role'];
+
+      final conv = await _supabase.from('conversations').insert({
+        'customer_id': myRole == 'customer' ? currentUserId : widget.userId,
+        'worker_id': myRole == 'worker' ? currentUserId : widget.userId,
+      }).select().single();
+
+      if (!mounted) return;
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => ChatScreen(
+            conversationId: conv['id'],
+            jobTitle: 'Direct Message'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Could not start chat. Try again.'),
+        backgroundColor: const Color(0xFFE53935),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -236,6 +294,27 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               ],
             ),
           ],
+          const SizedBox(height: 16),
+          // Chat button — visible to anyone viewing another user's profile
+          if (_supabase.auth.currentUser?.id != widget.userId)
+            SizedBox(
+              width: 180,
+              child: ElevatedButton.icon(
+                onPressed: _startChat,
+                icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                label: const Text('Send Message'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B00),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 0,
+                  textStyle: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            ),
         ],
       ),
     );

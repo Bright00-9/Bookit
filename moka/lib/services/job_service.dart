@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
 class JobService {
@@ -56,7 +57,7 @@ class JobService {
     }).toList();
   }
 
-  // Get customer's own jobs
+  // Get customer's own jobs (all statuses including expired)
   static Future<List<Map<String, dynamic>>> getMyJobs() async {
     final user = supabase.auth.currentUser;
     if (user == null) return [];
@@ -65,6 +66,7 @@ class JobService {
         .from('jobs')
         .select('*, job_applications(count)')
         .eq('customer_id', user.id)
+        .inFilter('status', ['open', 'accepted', 'completed', 'expired'])
         .order('created_at', ascending: false);
 
     return List<Map<String, dynamic>>.from(response);

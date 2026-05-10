@@ -21,7 +21,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadJobs();
   }
 
@@ -49,6 +49,8 @@ class _MyJobsScreenState extends State<MyJobsScreen>
       _allJobs.where((j) => j['status'] == 'accepted').toList();
   List<Map<String, dynamic>> get _completedJobs =>
       _allJobs.where((j) => j['status'] == 'completed').toList();
+  List<Map<String, dynamic>> get _expiredJobs =>
+      _allJobs.where((j) => j['status'] == 'expired').toList();
 
   String _timeAgo(String? ts) {
     if (ts == null) return '';
@@ -168,6 +170,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
             Tab(text: 'Open (${_openJobs.length})'),
             Tab(text: 'Active (${_activeJobs.length})'),
             Tab(text: 'Done (${_completedJobs.length})'),
+            Tab(text: 'Expired (${_expiredJobs.length})'),
           ],
         ),
       ),
@@ -180,6 +183,7 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                 _buildList(_openJobs, 'open'),
                 _buildList(_activeJobs, 'accepted'),
                 _buildList(_completedJobs, 'completed'),
+                _buildList(_expiredJobs, 'expired'),
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
@@ -220,7 +224,9 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                   ? 'No open jobs'
                   : type == 'accepted'
                       ? 'No active jobs'
-                      : 'No completed jobs yet',
+                      : type == 'expired'
+                          ? 'No expired jobs'
+                          : 'No completed jobs yet',
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -232,7 +238,9 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                   ? 'Post a job to get started'
                   : type == 'accepted'
                       ? 'Accept a worker from Open jobs'
-                      : 'Completed jobs appear here',
+                      : type == 'expired'
+                          ? 'Jobs expire after 72 hours with no worker'
+                          : 'Completed jobs appear here',
               style: const TextStyle(
                   color: Color(0xFF888888), fontSize: 13),
             ),

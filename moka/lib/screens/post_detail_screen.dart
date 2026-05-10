@@ -16,22 +16,38 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   List<Map<String, dynamic>> _comments = [];
   bool _isLiked = false;
   int _likesCount = 0;
+  int _commentsCount = 0;
   bool _isLoadingComments = true;
   bool _isSubmittingComment = false;
   final _commentController = TextEditingController();
   final _currentUserId =
       Supabase.instance.client.auth.currentUser?.id;
+  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
     super.initState();
     _likesCount = widget.post['likes_count'] ?? 0;
+    _commentsCount = widget.post['comments_count'] ?? 0;
     _loadData();
+    // Subscribe to realtime updates for this post
+    _realtimeChannel = PortfolioService.subscribeToPost(
+      postId: widget.post['id'],
+      onUpdate: (updated) {
+        if (mounted) {
+          setState(() {
+            _likesCount = updated['likes_count'] ?? _likesCount;
+            _commentsCount = updated['comments_count'] ?? _commentsCount;
+          });
+        }
+      },
+    );
   }
 
   @override
   void dispose() {
     _commentController.dispose();
+    _realtimeChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -79,6 +95,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
       _commentController.clear();
       await _loadData();
+      if (mounted) setState(() => _commentsCount = _comments.length);
     } catch (e) {
       debugPrint('Error submitting comment: $e');
     } finally {
@@ -244,7 +261,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             color: Color(0xFF888888), size: 26),
                         const SizedBox(width: 6),
                         Text(
-                          '${_comments.length}',
+                          '$_commentsCount',
                           style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,

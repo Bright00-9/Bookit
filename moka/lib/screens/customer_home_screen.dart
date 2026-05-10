@@ -1,12 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/job_service.dart';
 import '../services/portfolio_service.dart';
 import 'profile_screen.dart';
 import 'messages_screen.dart';
 import 'post_job_screen.dart';
-import 'rate_worker_screen.dart';
-import 'payment_screen.dart';
 import 'my_jobs_screen.dart';
 import 'post_detail_screen.dart';
 import 'public_profile_screen.dart';
@@ -23,12 +23,62 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _recentJobs = [];
   List<Map<String, dynamic>> _feedPosts = [];
+  List<Map<String, dynamic>> _topWorkers = [];
   bool _isLoadingJobs = true;
+  RealtimeChannel? _feedChannel;
+  RealtimeChannel? _jobsChannel;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    // Subscribe to realtime feed updates
+    _feedChannel = PortfolioService.subscribeToFeed(
+      onPostChange: _loadFeedOnly,
+    );
+    // Subscribe to new job applications (so customer sees applicants instantly)
+    _jobsChannel = Supabase.instance.client
+        .channel('my_job_applications')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'job_applications',
+          callback: (_) {
+            if (mounted) _loadJobsOnly();
+          },
+        )
+        .subscribe();
+    // Auto-refresh every 15 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) _loadData();
+    });
+  }
+
+  @override
+  void dispose() {
+    _feedChannel?.unsubscribe();
+    _jobsChannel?.unsubscribe();
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadJobsOnly() async {
+    try {
+      final jobs = await JobService.getMyJobs();
+      if (mounted) setState(() => _recentJobs = jobs);
+    } catch (e) {
+      debugPrint('Jobs update error: $e');
+    }
+  }
+
+  Future<void> _loadFeedOnly() async {
+    try {
+      final posts = await PortfolioService.getFeedPosts();
+      if (mounted) setState(() => _feedPosts = posts);
+    } catch (e) {
+      debugPrint('Feed update error: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -37,11 +87,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       final profile = await AuthService.getCurrentProfile();
       final jobs = await JobService.getMyJobs();
       final posts = await PortfolioService.getFeedPosts();
+      final workers = await PortfolioService.getTopWorkers();
       if (mounted) {
         setState(() {
           _profile = profile;
           _recentJobs = jobs;
           _feedPosts = posts;
+          _topWorkers = workers;
         });
       }
     } catch (e) {
@@ -66,35 +118,117 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: RefreshIndicator(
-                color: const Color(0xFFFF6B00),
-                backgroundColor: const Color(0xFF1A1A1A),
-                onRefresh: _loadData,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      _buildPostJobBanner(),
-                      const SizedBox(height: 28),
-                      _buildSkillCategories(),
-                      const SizedBox(height: 28),
-                      _buildRecentJobs(),
-                      const SizedBox(height: 28),
-                      _buildWorkerFeed(),
-                      const SizedBox(height: 20),
-                    ],
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerScrolled) => [
+            SliverToBoxAdapter(child: _buildHeader()),
+            SliverToBoxAdapter(child: _buildStatsBar()),
+          ],
+          body: RefreshIndicator(
+            color: const Color(0xFFFF6B00),
+            backgroundColor: const Color(0xFF1A1A1A),
+            onRefresh: _loadData,
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    child: _buildPostJobBanner(),
                   ),
                 ),
-              ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    child: _buildSkillCategories(),
+                  ),
+                ),
+                // Top Rated Workers
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    child: _buildSectionHeader('Top Rated Workers',
+                        onTap: null),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: _topWorkers.isEmpty
+                      ? const SizedBox.shrink()
+                      : SizedBox(
+                          height: 140,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: _topWorkers.length,
+                            itemBuilder: (context, i) =>
+                                _buildTopWorkerCard(_topWorkers[i]),
+                          ),
+                        ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                    child: _buildSectionHeader('My Jobs', onTap: () async {
+                      await Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const MyJobsScreen()));
+                      _loadData();
+                    }),
+                  ),
+                ),
+                _isLoadingJobs
+                    ? const SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator(
+                                color: Color(0xFFFF6B00)),
+                          ),
+                        ),
+                      )
+                    : _recentJobs.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: _buildEmptyJobs(),
+                            ),
+                          )
+                        : SliverToBoxAdapter(
+                            child: SizedBox(
+                              height: 160,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                itemCount: _recentJobs.length,
+                                itemBuilder: (context, i) =>
+                                    _buildJobCardHorizontal(_recentJobs[i]),
+                              ),
+                            ),
+                          ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                    child: _buildSectionHeader('Workers\' Feed', onTap: null),
+                  ),
+                ),
+                _feedPosts.isEmpty
+                    ? SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: _buildEmptyFeed(),
+                        ),
+                      )
+                    : SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, i) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: _buildFeedCard(_feedPosts[i]),
+                          ),
+                          childCount: _feedPosts.length,
+                        ),
+                      ),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: _buildBottomNav(),
@@ -110,6 +244,190 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Post Job',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, {VoidCallback? onTap}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700)),
+        if (onTap != null)
+          GestureDetector(
+            onTap: onTap,
+            child: const Text('See all',
+                style: TextStyle(color: Color(0xFFFF6B00), fontSize: 13)),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStatsBar() {
+    final open = _recentJobs.where((j) => j['status'] == 'open').length;
+    final active = _recentJobs.where((j) => j['status'] == 'accepted').length;
+    final done = _recentJobs.where((j) => j['status'] == 'completed').length;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _miniStat('$open', 'Open', const Color(0xFFFF6B00)),
+          _statDiv(),
+          _miniStat('$active', 'Active', const Color(0xFF4CAF50)),
+          _statDiv(),
+          _miniStat('$done', 'Done', const Color(0xFF888888)),
+          _statDiv(),
+          _miniStat('${_feedPosts.length}', 'Posts', const Color(0xFF2196F3)),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniStat(String value, String label, Color color) {
+    return Column(
+      children: [
+        Text(value,
+            style: TextStyle(
+                color: color, fontSize: 18, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
+        Text(label,
+            style: const TextStyle(
+                color: Color(0xFF888888), fontSize: 10)),
+      ],
+    );
+  }
+
+  Widget _statDiv() =>
+      Container(width: 1, height: 28, color: const Color(0xFF2A2A2A));
+
+  Widget _buildJobCardHorizontal(Map<String, dynamic> job) {
+    final status = job['status'] ?? 'open';
+    Color statusColor = const Color(0xFFFF6B00);
+    if (status == 'accepted') statusColor = const Color(0xFF4CAF50);
+    if (status == 'completed') statusColor = const Color(0xFF888888);
+    if (status == 'expired') statusColor = const Color(0xFFE53935);
+
+    int applicants = 0;
+    final appData = job['job_applications'];
+    if (appData is List && appData.isNotEmpty) {
+      applicants = appData[0]['count'] ?? 0;
+    }
+
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const MyJobsScreen()));
+        _loadData();
+      },
+      child: Container(
+        width: 220,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: statusColor.withOpacity(0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    status == 'open'
+                        ? '📋 Open'
+                        : status == 'accepted'
+                            ? '🔨 Active'
+                            : status == 'expired'
+                                ? '⏰ Expired'
+                                : '✅ Done',
+                    style: TextStyle(
+                        color: statusColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const Spacer(),
+                Text(_timeAgo(job['created_at']),
+                    style: const TextStyle(
+                        color: Color(0xFF555555), fontSize: 10)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(job['title'] ?? '',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+            const Spacer(),
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF252525),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(job['skill_needed'] ?? '',
+                      style: const TextStyle(
+                          color: Color(0xFF888888), fontSize: 10)),
+                ),
+                const Spacer(),
+                Text('$applicants applied',
+                    style: const TextStyle(
+                        color: Color(0xFF555555), fontSize: 10)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyFeed() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.photo_library_outlined,
+              color: Color(0xFF555555), size: 40),
+          SizedBox(height: 10),
+          Text('No worker posts yet',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14)),
+          SizedBox(height: 4),
+          Text('Workers will share their work here',
+              style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
+        ],
       ),
     );
   }
@@ -290,48 +608,125 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  Widget _buildRecentJobs() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildTopWorkerCard(Map<String, dynamic> worker) {
+    final name = worker['name'] ?? '';
+    final skill = worker['skill'] ?? '';
+    final rating = (worker['rating'] ?? 0.0).toDouble();
+    final avatarUrl = worker['avatar_url'];
+    final isOnline = worker['is_online'] == true;
+    final workerId = worker['id'];
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PublicProfileScreen(userId: workerId),
+        ),
+      ),
+      child: Container(
+        width: 110,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isOnline
+                ? const Color(0xFF4CAF50).withOpacity(0.4)
+                : const Color(0xFF2A2A2A),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Your Recent Jobs',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+            // Avatar with online indicator
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor:
+                      const Color(0xFFFF6B00).withOpacity(0.15),
+                  backgroundImage:
+                      avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                  child: avatarUrl == null
+                      ? Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                            color: Color(0xFFFF6B00),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        )
+                      : null,
+                ),
+                if (isOnline)
+                  Positioned(
+                    bottom: 1,
+                    right: 1,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: const Color(0xFF1A1A1A), width: 2),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            TextButton(
-              onPressed: _loadData,
-              child: const Text('Refresh',
-                  style: TextStyle(color: Color(0xFFFF6B00), fontSize: 13)),
+            const SizedBox(height: 8),
+            // Name
+            Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            // Skill
+            Text(
+              skill,
+              style: const TextStyle(
+                  color: Color(0xFF888888), fontSize: 10),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            // Rating
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.star_rounded,
+                    color: Color(0xFFFF6B00), size: 12),
+                const SizedBox(width: 2),
+                Text(
+                  rating.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: Color(0xFFFF6B00),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        if (_isLoadingJobs)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
-            ),
-          )
-        else if (_recentJobs.isEmpty)
-          _buildEmptyJobs()
-        else
-          ..._recentJobs.map((job) => _buildJobCard(job)),
-      ],
+      ),
     );
   }
 
   Widget _buildEmptyJobs() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(16),
@@ -339,247 +734,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.work_off_outlined,
-              color: Color(0xFF555555), size: 40),
-          const SizedBox(height: 12),
+          const Icon(Icons.work_off_outlined, color: Color(0xFF555555), size: 40),
+          const SizedBox(height: 10),
           const Text('No jobs posted yet',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600)),
+              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           const Text('Tap Post Job to get started',
               style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
         ],
       ),
-    );
-  }
-
-  Widget _buildJobCard(Map<String, dynamic> job) {
-    final status = job['status'] ?? 'open';
-    final isActive = status == 'open' || status == 'accepted';
-
-    int applicants = 0;
-    final appData = job['job_applications'];
-    if (appData is List && appData.isNotEmpty) {
-      applicants = appData[0]['count'] ?? 0;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isActive
-              ? const Color(0xFFFF6B00).withOpacity(0.4)
-              : const Color(0xFF2A2A2A),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? const Color(0xFFFF6B00).withOpacity(0.15)
-                  : const Color(0xFF252525),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.work_outline,
-              color: isActive
-                  ? const Color(0xFFFF6B00)
-                  : const Color(0xFF666666),
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  job['title'] ?? '',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF252525),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        job['skill_needed'] ?? '',
-                        style: const TextStyle(
-                            color: Color(0xFF888888), fontSize: 11),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _timeAgo(job['created_at']),
-                      style: const TextStyle(
-                          color: Color(0xFF555555), fontSize: 11),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? const Color(0xFFFF6B00).withOpacity(0.15)
-                      : status == 'completed'
-                          ? const Color(0xFF1E3A1E)
-                          : const Color(0xFF252525),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  status == 'open'
-                      ? 'Open'
-                      : status == 'accepted'
-                          ? 'Active'
-                          : 'Done',
-                  style: TextStyle(
-                    color: status == 'open'
-                        ? const Color(0xFFFF6B00)
-                        : status == 'accepted'
-                            ? const Color(0xFF4CAF50)
-                            : const Color(0xFF888888),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '$applicants applied',
-                style: const TextStyle(
-                    color: Color(0xFF555555), fontSize: 11),
-              ),
-              if (status == 'completed') ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PaymentScreen(
-                              jobId: job['id'],
-                              workerId: job['worker_id'] ?? '',
-                              workerName: job['worker_name'] ?? 'Worker',
-                              jobTitle: job['title'] ?? '',
-                              amount: (job['budget'] as num?)?.toDouble() ?? 0,
-                            ),
-                          ),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF4CAF50).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: const Color(0xFF4CAF50).withOpacity(0.4)),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              '💳 Pay',
-                              style: TextStyle(
-                                color: Color(0xFF4CAF50),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => RateWorkerScreen(
-                              jobId: job['id'],
-                              workerId: job['worker_id'] ?? '',
-                              workerName: job['worker_name'] ?? 'Worker',
-                              jobTitle: job['title'] ?? '',
-                            ),
-                          ),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF6B00).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: const Color(0xFFFF6B00).withOpacity(0.4)),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              '⭐ Rate',
-                              style: TextStyle(
-                                color: Color(0xFFFF6B00),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWorkerFeed() {
-    if (_feedPosts.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Workers\' Recent Work',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 14),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _feedPosts.length > 5 ? 5 : _feedPosts.length,
-          itemBuilder: (context, i) => _buildFeedCard(_feedPosts[i]),
-        ),
-      ],
     );
   }
 
@@ -593,11 +756,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final commentsCount = post['comments_count'] ?? 0;
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => PostDetailScreen(post: post)),
-      ),
+      onTap: () => Navigator.push(context,
+        MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
+      ).then((_) => _loadFeedOnly()),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -612,13 +773,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             GestureDetector(
               onTap: () {
                 if (workerId != null) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          PublicProfileScreen(userId: workerId),
-                    ),
-                  );
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => PublicProfileScreen(userId: workerId),
+                  ));
                 }
               },
               child: Padding(
@@ -627,101 +784,77 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   children: [
                     CircleAvatar(
                       radius: 18,
-                      backgroundColor:
-                          const Color(0xFFFF6B00).withOpacity(0.15),
-                      backgroundImage: avatarUrl != null
-                          ? NetworkImage(avatarUrl)
-                          : null,
+                      backgroundColor: const Color(0xFFFF6B00).withOpacity(0.15),
+                      backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
                       child: avatarUrl == null
                           ? Text(workerName[0].toUpperCase(),
-                              style: const TextStyle(
-                                  color: Color(0xFFFF6B00),
-                                  fontWeight: FontWeight.w700))
+                              style: const TextStyle(color: Color(0xFFFF6B00), fontWeight: FontWeight.w700))
                           : null,
                     ),
                     const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(workerName,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13)),
-                        Text(workerSkill,
-                            style: const TextStyle(
-                                color: Color(0xFF888888),
-                                fontSize: 11)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(workerName,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                          Text(workerSkill,
+                              style: const TextStyle(color: Color(0xFF888888), fontSize: 11)),
+                        ],
+                      ),
                     ),
-                    const Spacer(),
                     if (post['skill'] != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color:
-                              const Color(0xFFFF6B00).withOpacity(0.15),
+                          color: const Color(0xFFFF6B00).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(post['skill'],
-                            style: const TextStyle(
-                                color: Color(0xFFFF6B00),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600)),
+                            style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 10, fontWeight: FontWeight.w600)),
                       ),
                   ],
                 ),
               ),
             ),
-
             // Image
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(),
               child: Image.network(
                 post['image_url'],
                 width: double.infinity,
-                height: 200,
+                height: 220,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
-                  height: 200,
+                  height: 220,
                   color: const Color(0xFF252525),
-                  child: const Icon(Icons.image_not_supported,
-                      color: Color(0xFF555555), size: 40),
+                  child: const Icon(Icons.image_not_supported, color: Color(0xFF555555), size: 40),
                 ),
               ),
             ),
-
-            // Caption + likes
+            // Caption + stats
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (post['caption'] != null)
-                    Text(
-                      post['caption'],
-                      style: const TextStyle(
-                          color: Color(0xFFCCCCCC), fontSize: 13),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  const SizedBox(height: 8),
+                    Text(post['caption'],
+                        style: const TextStyle(color: Color(0xFFCCCCCC), fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Icon(Icons.favorite_border_rounded,
-                          color: Color(0xFF888888), size: 18),
+                      const Icon(Icons.favorite_border_rounded, color: Color(0xFF888888), size: 18),
                       const SizedBox(width: 4),
-                      Text('$likesCount',
-                          style: const TextStyle(
-                              color: Color(0xFF888888), fontSize: 12)),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.chat_bubble_outline,
-                          color: Color(0xFF888888), size: 16),
+                      Text('$likesCount', style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+                      const SizedBox(width: 14),
+                      const Icon(Icons.chat_bubble_outline, color: Color(0xFF888888), size: 16),
                       const SizedBox(width: 4),
-                      Text('$commentsCount',
-                          style: const TextStyle(
-                              color: Color(0xFF888888), fontSize: 12)),
+                      Text('$commentsCount', style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+                      const Spacer(),
+                      const Text('Tap to view & like',
+                          style: TextStyle(color: Color(0xFF555555), fontSize: 11)),
                     ],
                   ),
                 ],

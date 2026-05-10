@@ -4,6 +4,59 @@ import 'supabase_service.dart';
 
 class PortfolioService {
 
+  // Subscribe to realtime post updates (likes/comments count)
+  static RealtimeChannel subscribeToPost({
+    required String postId,
+    required void Function(Map<String, dynamic>) onUpdate,
+  }) {
+    return supabase
+        .channel('post:$postId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'portfolio_posts',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: postId,
+          ),
+          callback: (payload) => onUpdate(payload.newRecord),
+        )
+        .subscribe();
+  }
+
+  // Subscribe to feed post updates (all posts)
+  static RealtimeChannel subscribeToFeed({
+    required void Function() onPostChange,
+  }) {
+    return supabase
+        .channel('feed_posts')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'portfolio_posts',
+          callback: (_) => onPostChange(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'portfolio_posts',
+          callback: (_) => onPostChange(),
+        )
+        .subscribe();
+  }
+
+  // Get top 10 highest rated workers
+  static Future<List<Map<String, dynamic>>> getTopWorkers() async {
+    final data = await supabase
+        .from('profiles')
+        .select('id, name, skill, rating, avatar_url, is_online')
+        .eq('role', 'worker')
+        .order('rating', ascending: false)
+        .limit(10);
+    return List<Map<String, dynamic>>.from(data);
+  }
+
   // Get public profile for any user
   static Future<Map<String, dynamic>> getPublicProfile(String userId) async {
     final data = await supabase
