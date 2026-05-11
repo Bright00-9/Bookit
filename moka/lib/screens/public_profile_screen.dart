@@ -31,26 +31,43 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     try {
       final currentUserId = _supabase.auth.currentUser?.id;
       if (currentUserId == null) return;
-      if (currentUserId == widget.userId) return; // can't chat with yourself
+      if (currentUserId == widget.userId) return;
 
-      // Check existing conversation
+      // Show loading
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Opening chat...'),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Check existing conversation between these two users
       final existing = await _supabase
           .from('conversations')
           .select('id')
-          .or('and(customer_id.eq.$currentUserId,worker_id.eq.${widget.userId}),and(customer_id.eq.${widget.userId},worker_id.eq.$currentUserId)')
+          .or(
+            'and(customer_id.eq.$currentUserId,worker_id.eq.${widget.userId}),'
+            'and(customer_id.eq.${widget.userId},worker_id.eq.$currentUserId)',
+          )
           .maybeSingle();
 
       if (existing != null) {
         if (!mounted) return;
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ChatScreen(
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatScreen(
               conversationId: existing['id'],
-              jobTitle: 'Direct Message'),
-        ));
+              jobTitle: 'Direct Message',
+            ),
+          ),
+        );
         return;
       }
 
-      // Get role to assign customer/worker correctly
+      // Get my role
       final myProfile = await _supabase
           .from('profiles')
           .select('role')
@@ -58,26 +75,48 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
           .single();
 
       final myRole = myProfile['role'];
+      final isCustomer = myRole == 'customer';
 
-      final conv = await _supabase.from('conversations').insert({
-        'customer_id': myRole == 'customer' ? currentUserId : widget.userId,
-        'worker_id': myRole == 'worker' ? currentUserId : widget.userId,
-      }).select().single();
+      // Create conversation — job_id is null for direct messages
+      // Make sure you ran direct_message_update.sql in Supabase first!
+      final conv = await _supabase
+          .from('conversations')
+          .insert({
+            'job_id': null,
+            'customer_id': isCustomer ? currentUserId : widget.userId,
+            'worker_id': isCustomer ? widget.userId : currentUserId,
+          })
+          .select('id')
+          .single();
 
       if (!mounted) return;
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) => ChatScreen(
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
             conversationId: conv['id'],
-            jobTitle: 'Direct Message'),
-      ));
+            jobTitle: 'Direct Message',
+          ),
+        ),
+      );
     } catch (e) {
+      debugPrint('Chat error: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Could not start chat. Try again.'),
-        backgroundColor: const Color(0xFFE53935),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().contains('null')
+                ? 'Run direct_message_update.sql in Supabase first'
+                : 'Could not start chat. Try again.',
+          ),
+          backgroundColor: const Color(0xFFE53935),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
     }
   }
 
