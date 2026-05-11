@@ -5,6 +5,7 @@ import 'worker_reviews_screen.dart';
 import 'post_detail_screen.dart';
 import 'chat_screen.dart';
 
+
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
 
@@ -115,8 +116,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-    }
-  }
     }
   }
 
