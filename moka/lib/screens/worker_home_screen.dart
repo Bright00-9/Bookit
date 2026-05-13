@@ -1084,14 +1084,6 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
       horizontalTitleGap: 8,
     );
   }
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildOnlineToggle() {
     return Container(
