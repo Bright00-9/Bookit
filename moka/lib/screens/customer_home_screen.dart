@@ -24,7 +24,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   List<Map<String, dynamic>> _recentJobs = [];
   List<Map<String, dynamic>> _feedPosts = [];
   List<Map<String, dynamic>> _topWorkers = [];
-  bool _isLoadingJobs = true;
+  bool _isLoadingJobs = false; // false so no spinner on startup
   RealtimeChannel? _feedChannel;
   RealtimeChannel? _jobsChannel;
   Timer? _refreshTimer;
@@ -49,9 +49,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           },
         )
         .subscribe();
-    // Auto-refresh every 15 seconds
+    // Auto-refresh every 15 seconds silently
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) _loadData();
+      if (mounted) _loadData(silent: true);
     });
   }
 
@@ -81,8 +81,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoadingJobs = true);
+  Future<void> _loadData({bool silent = false}) async {
+    if (!silent) setState(() => _isLoadingJobs = true);
     try {
       final profile = await AuthService.getCurrentProfile();
       final jobs = await JobService.getMyJobs();
@@ -94,11 +94,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           _recentJobs = jobs;
           _feedPosts = posts;
           _topWorkers = workers;
+          _isLoadingJobs = false;
         });
       }
     } catch (e) {
       debugPrint('Error loading data: $e');
-    } finally {
       if (mounted) setState(() => _isLoadingJobs = false);
     }
   }
@@ -117,6 +117,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
+      drawer: _buildDrawer(),
       body: SafeArea(
         child: NestedScrollView(
           headerSliverBuilder: (context, innerScrolled) => [
@@ -434,42 +435,278 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Widget _buildHeader() {
     final name = _profile?['name'] ?? 'there';
+    final avatarUrl = _profile?['avatar_url'];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 20, 0),
       child: Row(
         children: [
+          // Menu button
+          GestureDetector(
+            onTap: () => Scaffold.of(context).openDrawer(),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF2A2A2A)),
+              ),
+              child: const Icon(Icons.menu_rounded,
+                  color: Colors.white, size: 20),
+            ),
+          ),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF6B00),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  const Text('MoKa',
+                      style: TextStyle(
+                          color: Color(0xFFFF6B00),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1)),
+                ],
+              ),
               Text(
                 'Hello, $name 👋',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
                 ),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'What do you need help with?',
-                style: TextStyle(color: Color(0xFF888888), fontSize: 13),
               ),
             ],
           ),
           const Spacer(),
+          // Avatar
           GestureDetector(
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ProfileScreen()),
             ),
-            child: const CircleAvatar(
-              radius: 22,
-              backgroundColor: Color(0xFF1A1A1A),
-              child: Icon(Icons.person, color: Color(0xFF888888)),
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: const Color(0xFF1A1A1A),
+              backgroundImage:
+                  avatarUrl != null ? NetworkImage(avatarUrl) : null,
+              child: avatarUrl == null
+                  ? const Icon(Icons.person,
+                      color: Color(0xFF888888), size: 20)
+                  : null,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    final name = _profile?['name'] ?? '';
+    final email = AuthService.currentEmail ?? '';
+    final avatarUrl = _profile?['avatar_url'];
+
+    return Drawer(
+      backgroundColor: const Color(0xFF111111),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: Color(0xFF1F1F1F))),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor:
+                        const Color(0xFFFF6B00).withOpacity(0.15),
+                    backgroundImage: avatarUrl != null
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl == null
+                        ? Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                                color: Color(0xFFFF6B00),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800))
+                        : null,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16)),
+                        Text(email,
+                            style: const TextStyle(
+                                color: Color(0xFF888888), fontSize: 12),
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B00).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Customer',
+                              style: TextStyle(
+                                  color: Color(0xFFFF6B00),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // App branding
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B00),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.handyman_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('MoKa',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16)),
+                      Text('Workers On Demand',
+                          style: TextStyle(
+                              color: Color(0xFF888888), fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(color: Color(0xFF1F1F1F)),
+
+            // Menu items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _drawerItem(Icons.home_outlined, 'Home', () => Navigator.pop(context)),
+                  _drawerItem(Icons.work_outline, 'My Jobs', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const MyJobsScreen()));
+                  }),
+                  _drawerItem(Icons.chat_bubble_outline, 'Messages', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const MessagesScreen()));
+                  }),
+                  _drawerItem(Icons.person_outline, 'My Profile', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const ProfileScreen()));
+                  }),
+                  const Divider(color: Color(0xFF1F1F1F)),
+                  _drawerItem(Icons.add_circle_outline, 'Post a Job', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const PostJobScreen()));
+                  }),
+                  const Divider(color: Color(0xFF1F1F1F)),
+                  _drawerItem(Icons.help_outline, 'Help & Support', () {
+                    Navigator.pop(context);
+                  }),
+                  _drawerItem(Icons.description_outlined, 'Terms & Conditions', () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const ProfileScreen()));
+                  }),
+                  _drawerItem(Icons.info_outline, 'About MoKa', () {
+                    Navigator.pop(context);
+                    showAboutDialog(
+                      context: context,
+                      applicationName: 'MoKa',
+                      applicationVersion: '1.0.0',
+                      applicationIcon: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B00),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.handyman_rounded,
+                            color: Colors.white, size: 26),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+
+            // Logout
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFF1F1F1F))),
+              ),
+              child: _drawerItem(
+                Icons.logout,
+                'Log Out',
+                () async {
+                  Navigator.pop(context);
+                  await AuthService.logout();
+                  if (!mounted) return;
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+                color: const Color(0xFFE53935),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItem(IconData icon, String label, VoidCallback onTap,
+      {Color color = const Color(0xFFCCCCCC)}) {
+    return ListTile(
+      leading: Icon(icon, color: color, size: 20),
+      title: Text(label,
+          style: TextStyle(
+              color: color, fontSize: 14, fontWeight: FontWeight.w500)),
+      onTap: onTap,
+      dense: true,
+      horizontalTitleGap: 8,
     );
   }
 

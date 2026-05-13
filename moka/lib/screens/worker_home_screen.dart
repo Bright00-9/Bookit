@@ -44,7 +44,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted) return;
       _loadFeed();
-      if (_isOnline) _loadNearbyJobs();
+      if (_isOnline) _loadNearbyJobs(silent: true);
     });
   }
 
@@ -93,7 +93,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
           schema: 'public',
           table: 'jobs',
           callback: (_) {
-            if (_isOnline && mounted) _loadNearbyJobs();
+            if (_isOnline && mounted) _loadNearbyJobs(silent: true);
           },
         )
         .subscribe();
@@ -128,20 +128,20 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     }
   }
 
-  Future<void> _loadNearbyJobs() async {
+  Future<void> _loadNearbyJobs({bool silent = false}) async {
     if (_lat == null || _lng == null || _profile == null) return;
-    setState(() => _isLoadingJobs = true);
+    if (!silent) setState(() => _isLoadingJobs = true);
     try {
       final jobs = await JobService.getNearbyJobs(
         skill: _profile!['skill'] ?? '',
         lat: _lat!,
         lng: _lng!,
       );
-      setState(() => _nearbyJobs = jobs);
+      if (mounted) setState(() => _nearbyJobs = jobs);
     } catch (e) {
       debugPrint('Error loading jobs: $e');
     } finally {
-      setState(() => _isLoadingJobs = false);
+      if (mounted) setState(() => _isLoadingJobs = false);
     }
   }
 
@@ -196,6 +196,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
+      drawer: _buildDrawer(),
       body: SafeArea(
         child: Column(
           children: [
@@ -756,26 +757,57 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
     final name = _profile?['name'] ?? 'Worker';
     final skill = _profile?['skill'] ?? '';
     final rating = _profile?['rating'] ?? 0.0;
+    final avatarUrl = _profile?['avatar_url'];
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 20, 0),
       child: Row(
         children: [
+          // Menu button
+          GestureDetector(
+            onTap: () => Scaffold.of(context).openDrawer(),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF2A2A2A)),
+              ),
+              child: const Icon(Icons.menu_rounded,
+                  color: Colors.white, size: 20),
+            ),
+          ),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF6B00),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  const Text('MoKa',
+                      style: TextStyle(
+                          color: Color(0xFFFF6B00),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1)),
+                ],
+              ),
               Text(
                 'Hey, $name 👷',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$skill • ⭐ $rating',
-                style: const TextStyle(
-                    color: Color(0xFF888888), fontSize: 13),
               ),
             ],
           ),
@@ -787,17 +819,23 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
             ),
             child: Stack(
               children: [
-                const CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Color(0xFF1A1A1A),
-                  child: Icon(Icons.person, color: Color(0xFF888888)),
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: const Color(0xFF1A1A1A),
+                  backgroundImage: avatarUrl != null
+                      ? NetworkImage(avatarUrl)
+                      : null,
+                  child: avatarUrl == null
+                      ? const Icon(Icons.person,
+                          color: Color(0xFF888888), size: 20)
+                      : null,
                 ),
                 Positioned(
                   right: 0,
                   bottom: 0,
                   child: Container(
-                    width: 12,
-                    height: 12,
+                    width: 10,
+                    height: 10,
                     decoration: BoxDecoration(
                       color: _isOnline
                           ? const Color(0xFF4CAF50)
@@ -807,6 +845,245 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                           color: const Color(0xFF0D0D0D), width: 2),
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    final name = _profile?['name'] ?? '';
+    final email = AuthService.currentEmail ?? '';
+    final skill = _profile?['skill'] ?? '';
+    final rating = (_profile?['rating'] ?? 0.0).toDouble();
+    final avatarUrl = _profile?['avatar_url'];
+
+    return Drawer(
+      backgroundColor: const Color(0xFF111111),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: Color(0xFF1F1F1F))),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor:
+                        const Color(0xFFFF6B00).withOpacity(0.15),
+                    backgroundImage: avatarUrl != null
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl == null
+                        ? Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                                color: Color(0xFFFF6B00),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800))
+                        : null,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16)),
+                        Text(email,
+                            style: const TextStyle(
+                                color: Color(0xFF888888), fontSize: 12),
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF6B00)
+                                    .withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                skill.isNotEmpty ? skill : 'Worker',
+                                style: const TextStyle(
+                                    color: Color(0xFFFF6B00),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.star_rounded,
+                                color: Color(0xFFFF6B00), size: 12),
+                            const SizedBox(width: 2),
+                            Text(rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                    color: Color(0xFFFF6B00),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // App branding
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B00),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.handyman_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('MoKa',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16)),
+                      Text('Workers On Demand',
+                          style: TextStyle(
+                              color: Color(0xFF888888), fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(color: Color(0xFF1F1F1F)),
+
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _drawerItem(Icons.home_outlined, 'Home',
+                      () => Navigator.pop(context)),
+                  _drawerItem(Icons.work_outline, 'My Jobs', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const WorkerMyJobsScreen()));
+                  }),
+                  _drawerItem(Icons.chat_bubble_outline, 'Messages', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const MessagesScreen()));
+                  }),
+                  _drawerItem(Icons.photo_library_outlined, 'My Posts', () {
+                    Navigator.pop(context);
+                    _tabController.animateTo(2);
+                  }),
+                  _drawerItem(Icons.person_outline, 'My Profile', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ProfileScreen()));
+                  }),
+                  const Divider(color: Color(0xFF1F1F1F)),
+                  _drawerItem(
+                      Icons.add_photo_alternate_outlined, 'Share Work', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                const CreatePortfolioPostScreen()));
+                  }),
+                  const Divider(color: Color(0xFF1F1F1F)),
+                  _drawerItem(Icons.help_outline, 'Help & Support',
+                      () => Navigator.pop(context)),
+                  _drawerItem(Icons.description_outlined, 'Terms & Conditions',
+                      () => Navigator.pop(context)),
+                  _drawerItem(Icons.info_outline, 'About MoKa', () {
+                    Navigator.pop(context);
+                    showAboutDialog(
+                      context: context,
+                      applicationName: 'MoKa',
+                      applicationVersion: '1.0.0',
+                      applicationIcon: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B00),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.handyman_rounded,
+                            color: Colors.white, size: 26),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+
+            // Logout
+            Container(
+              decoration: const BoxDecoration(
+                border:
+                    Border(top: BorderSide(color: Color(0xFF1F1F1F))),
+              ),
+              child: _drawerItem(
+                Icons.logout,
+                'Log Out',
+                () async {
+                  Navigator.pop(context);
+                  await AuthService.updateWorkerStatus(isOnline: false);
+                  await AuthService.logout();
+                  if (!mounted) return;
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+                color: const Color(0xFFE53935),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerItem(IconData icon, String label, VoidCallback onTap,
+      {Color color = const Color(0xFFCCCCCC)}) {
+    return ListTile(
+      leading: Icon(icon, color: color, size: 20),
+      title: Text(label,
+          style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w500)),
+      onTap: onTap,
+      dense: true,
+      horizontalTitleGap: 8,
+    );
+  }
                 ),
               ],
             ),
