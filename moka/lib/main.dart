@@ -11,6 +11,7 @@ import 'screens/worker_home_screen.dart';
 import 'services/supabase_service.dart';
 import 'services/notification_service.dart';
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

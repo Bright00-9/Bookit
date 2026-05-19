@@ -10,6 +10,8 @@ import 'post_job_screen.dart';
 import 'my_jobs_screen.dart';
 import 'post_detail_screen.dart';
 import 'public_profile_screen.dart';
+import '../app_tip_dialog.dart';
+import 'settings_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -29,9 +31,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   RealtimeChannel? _jobsChannel;
   Timer? _refreshTimer;
 
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await AppTipDialog.showIfEnabled(context);
+    });
     _loadData();
     // Subscribe to realtime feed updates
     _feedChannel = PortfolioService.subscribeToFeed(
@@ -122,7 +128,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         child: NestedScrollView(
           headerSliverBuilder: (context, innerScrolled) => [
             SliverToBoxAdapter(child: _buildHeader()),
-            SliverToBoxAdapter(child: _buildStatsBar()),
           ],
           body: RefreshIndicator(
             color: const Color(0xFFFF6B00),
@@ -265,34 +270,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 style: TextStyle(color: Color(0xFFFF6B00), fontSize: 13)),
           ),
       ],
-    );
-  }
-
-  Widget _buildStatsBar() {
-    final open = _recentJobs.where((j) => j['status'] == 'open').length;
-    final active = _recentJobs.where((j) => j['status'] == 'accepted').length;
-    final done = _recentJobs.where((j) => j['status'] == 'completed').length;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _miniStat('$open', 'Open', const Color(0xFFFF6B00)),
-          _statDiv(),
-          _miniStat('$active', 'Active', const Color(0xFF4CAF50)),
-          _statDiv(),
-          _miniStat('$done', 'Done', const Color(0xFF888888)),
-          _statDiv(),
-          _miniStat('${_feedPosts.length}', 'Posts', const Color(0xFF2196F3)),
-        ],
-      ),
     );
   }
 
@@ -651,6 +628,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     Navigator.pop(context);
                     Navigator.push(context, MaterialPageRoute(
                         builder: (_) => const ProfileScreen()));
+                  }),
+                  _drawerItem(Icons.settings_outlined, 'Settings', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
                   }),
                   _drawerItem(Icons.info_outline, 'About MoKa', () {
                     Navigator.pop(context);

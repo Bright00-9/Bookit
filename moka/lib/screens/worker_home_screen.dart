@@ -11,6 +11,7 @@ import 'profile_screen.dart';
 import 'worker_my_jobs_screen.dart';
 import 'create_portfolio_post_screen.dart';
 import 'post_detail_screen.dart';
+import 'settings_screen.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -354,7 +355,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isMyPost
-                ? const Color(0xFFFF6B00).withOpacity(0.3)
+                ? const Color(0xFFFF6B00).withValues(alpha: 0.3)
                 : const Color(0xFF2A2A2A),
           ),
         ),
@@ -369,7 +370,7 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                   CircleAvatar(
                     radius: 18,
                     backgroundColor:
-                        const Color(0xFFFF6B00).withOpacity(0.15),
+                        const Color(0xFFFF6B00).withValues(alpha: 0.15),
                     backgroundImage: avatarUrl != null
                         ? NetworkImage(avatarUrl)
                         : null,
@@ -1017,6 +1018,13 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
                         MaterialPageRoute(
                             builder: (_) =>
                                 const CreatePortfolioPostScreen()));
+                  }),
+                  _drawerItem(Icons.settings_outlined, 'Settings', () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
                   }),
                   const Divider(color: Color(0xFF1F1F1F)),
                   _drawerItem(Icons.help_outline, 'Help & Support',
