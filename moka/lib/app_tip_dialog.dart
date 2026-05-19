@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'app_tips.dart';
-import 'Services/role_service.dart';
-import 'Services/tips_service.dart';
+import '/services/role_service.dart';
+import '/services/tips_service.dart';
 
 class AppTipDialog extends StatelessWidget {
   final AppTip tip;
