@@ -83,15 +83,18 @@ class _ResumeViewWidgetState extends State<ResumeViewWidget> {
           ),
         );
       }
-    } catch (e) {
+    } 
+    catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Download failed: $e')),
         );
       }
-    } finally {
+    } 
+    
+    finally {
       if (mounted) setState(() {
-        _isDownloading = false;
+        _isDownloading = bool false;
         _downloadProgress = 0;
       });
     }

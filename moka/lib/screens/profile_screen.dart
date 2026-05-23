@@ -1,10 +1,16 @@
-import 'dart:io';
+ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../services/resume_service.dart';
+import '../services/settings_service.dart';
+import '../widgets/resume_picker_widget.dart';
+import '../models/resume_model.dart';
+import '../models/worker_medal.dart';
 import 'worker_reviews_screen.dart';
 import 'public_profile_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,6 +26,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSaving = false;
   bool _isUploadingAvatar = false;
   String? _avatarUrl;
+
+  // Resume
+  ResumeModel? _resume;
+  bool _showResume = false;
 
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
@@ -43,12 +53,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
     try {
       final profile = await AuthService.getCurrentProfile();
+
+      // Load resume if worker
+      ResumeModel? resume;
+      if (profile?['role'] == 'worker') {
+        try {
+          resume = await ResumeService().fetchResume();
+        } catch (_) {}
+      }
+
       if (mounted) {
         setState(() {
           _profile = profile;
           _nameController.text = profile?['name'] ?? '';
           _phoneController.text = profile?['phone'] ?? '';
           _avatarUrl = profile?['avatar_url'];
+          _resume = resume;
         });
       }
     } catch (e) {
@@ -140,6 +160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              await NotificationService.clearTokenOnLogout();
               await AuthService.logout();
               if (!mounted) return;
               Navigator.pushReplacementNamed(context, '/login');
@@ -200,6 +221,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (_profile?['role'] == 'worker') ...[
                       _buildWorkerStats(),
                       const SizedBox(height: 24),
+                      _buildResumeSection(),
+                      const SizedBox(height: 24),
                     ],
                     _buildSettingsSection(),
                     const SizedBox(height: 24),
@@ -212,7 +235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Header ────────────────────────────────────────────────────────────────
+  // ─── Header ──────────────────────────────────────────────────
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -266,19 +289,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Avatar ────────────────────────────────────────────────────────────────
+  // ─── Avatar ───────────────────────────────────────────────────
   Widget _buildAvatarSection() {
     final name = _profile?['name'] ?? '';
     final role = _profile?['role'] ?? 'customer';
     final skill = _profile?['skill'] ?? '';
     final savedUrl = _avatarUrl ?? _profile?['avatar_url'];
 
+    // Medal for workers
+    final rating = (_profile?['rating'] ?? 0.0) is num
+        ? (_profile?['rating'] ?? 0.0).toDouble()
+        : 0.0;
+    final medal =
+        role == 'worker' && rating > 0 ? getMedal(rating) : null;
+
     return Column(
       children: [
         GestureDetector(
           onTap: _pickAndUploadAvatar,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
+              // Avatar ring color from medal
               Container(
                 width: 90,
                 height: 90,
@@ -286,7 +318,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: const Color(0xFF1A1A1A),
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: const Color(0xFFFF6B00), width: 2.5),
+                    color: medal?.accentColor ?? const Color(0xFFFF6B00),
+                    width: 2.5,
+                  ),
                 ),
                 child: _isUploadingAvatar
                     ? const Padding(
@@ -300,11 +334,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               width: 90,
                               height: 90,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _avatarInitial(name),
+                              errorBuilder: (_, __, ___) =>
+                                  _avatarInitial(name),
                             ),
                           )
                         : _avatarInitial(name),
               ),
+
+              // Camera button
               Positioned(
                 bottom: 2,
                 right: 2,
@@ -321,33 +358,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: Colors.white, size: 13),
                 ),
               ),
+
+              // Medal badge on top-left of avatar
+              if (medal != null)
+                Positioned(
+                  top: -4,
+                  left: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D0D0D),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: medal.accentColor, width: 1),
+                    ),
+                    child: Text(medal.emoji,
+                        style: const TextStyle(fontSize: 14)),
+                  ),
+                ),
             ],
           ),
         ),
         const SizedBox(height: 12),
+
         InkWell(
-            onTap: () {
-              final workerId = _profile?['id']; // Make sure you have the ID from your profile data
-              if (workerId != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PublicProfileScreen(userId: workerId),
-                  ),
-                );
-              }
-            },
-            child: Column(
-              children: [
-                Text(name,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800)),
-              ],
-            ),
-          ),
+          onTap: () {
+            final workerId = _profile?['id'];
+            if (workerId != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      PublicProfileScreen(userId: workerId),
+                ),
+              );
+            }
+          },
+          child: Text(name,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800)),
+        ),
         const SizedBox(height: 4),
+
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -381,6 +435,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: Color(0xFF888888), fontSize: 12)),
               ),
             ],
+
+            // Medal badge next to role
+            if (medal != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: medal.backgroundColor,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: medal.accentColor.withOpacity(0.5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(medal.emoji,
+                        style: const TextStyle(fontSize: 11)),
+                    const SizedBox(width: 4),
+                    Text(
+                      medal.label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: medal.accentColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ],
@@ -399,7 +484,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Info Section ──────────────────────────────────────────────────────────
+  // ─── Info Section ─────────────────────────────────────────────
   Widget _buildInfoSection() {
     return Container(
       decoration: BoxDecoration(
@@ -519,7 +604,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildDivider() =>
       const Divider(height: 1, color: Color(0xFF2A2A2A), indent: 50);
 
-  // ─── Worker Stats ──────────────────────────────────────────────────────────
+  // ─── Worker Stats ─────────────────────────────────────────────
   Widget _buildWorkerStats() {
     final rating = (_profile?['rating'] ?? 0.0).toStringAsFixed(1);
     return Column(
@@ -575,7 +660,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Settings Section ──────────────────────────────────────────────────────
+  // ─── Resume Section (workers only) ───────────────────────────
+  Widget _buildResumeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header row with toggle
+        GestureDetector(
+          onTap: () => setState(() => _showResume = !_showResume),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('My Resume',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700)),
+              Row(
+                children: [
+                  // Resume status chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _resume != null
+                          ? const Color(0xFF4CAF50).withOpacity(0.15)
+                          : const Color(0xFF888888).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _resume != null ? '✅ Added' : 'Not added',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _resume != null
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFF888888),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _showResume
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: const Color(0xFF888888),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // Collapsible resume widget
+        if (_showResume) ...[
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF2A2A2A)),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Theme(
+              // Override theme so widget matches dark UI
+              data: Theme.of(context).copyWith(
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                      primary: const Color(0xFFFF6B00),
+                    ),
+                inputDecorationTheme: const InputDecorationTheme(
+                  labelStyle: TextStyle(color: Color(0xFF888888)),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF2A2A2A)),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFFFF6B00)),
+                  ),
+                ),
+                chipTheme: ChipThemeData(
+                  backgroundColor: const Color(0xFF2A2A2A),
+                  labelStyle: const TextStyle(color: Colors.white),
+                  side: const BorderSide(color: Color(0xFF3A3A3A)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              child: ResumePickerWidget(
+                onResumeReady: (ResumeModel? resume) {
+                  if (mounted) setState(() => _resume = resume);
+                },
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ─── Settings Section ─────────────────────────────────────────
   Widget _buildSettingsSection() {
     return Container(
       decoration: BoxDecoration(
@@ -602,18 +783,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _buildDivider(),
           ],
+
+          // ── Settings (navigates to full SettingsScreen) ──
           _buildSettingsTile(
-            icon: Icons.notifications_outlined,
-            label: 'Notifications',
-            onTap: () {},
+            icon: Icons.settings_outlined,
+            label: 'Settings',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const SettingsScreen(),
+              ),
+            ),
           ),
           _buildDivider(),
-          _buildSettingsTile(
-            icon: Icons.lock_outline,
-            label: 'Change Password',
-            onTap: () {},
-          ),
-          _buildDivider(),
+
           _buildSettingsTile(
             icon: Icons.description_outlined,
             label: 'Terms & Conditions',
@@ -668,7 +851,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Dialogs ───────────────────────────────────────────────────────────────
+  // ─── Dialogs ──────────────────────────────────────────────────
   void _showTermsDialog() {
     _showScrollableDialog(
       icon: Icons.description_outlined,
@@ -863,7 +1046,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Logout ────────────────────────────────────────────────────────────────
+  // ─── Logout ───────────────────────────────────────────────────
   Widget _buildLogoutButton() {
     return SizedBox(
       width: double.infinity,
@@ -885,7 +1068,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// ─── Section helper ────────────────────────────────────────────────────────
+// ─── Section helper ───────────────────────────────────────────
 class _Section {
   final String title;
   final String body;

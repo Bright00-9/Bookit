@@ -1,17 +1,20 @@
-import 'dart:async';
+ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import '../services/job_service.dart';
 import '../services/portfolio_service.dart';
+import '../models/worker_medal.dart';
 import 'profile_screen.dart';
 import 'messages_screen.dart';
 import 'post_job_screen.dart';
 import 'my_jobs_screen.dart';
 import 'post_detail_screen.dart';
 import 'public_profile_screen.dart';
-import '../app_tip_dialog.dart';
 import 'settings_screen.dart';
+import '../app_tip_dialog.dart';
+import 'worker_list_screen.dart';
+import 'leaderboard_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -26,11 +29,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   List<Map<String, dynamic>> _recentJobs = [];
   List<Map<String, dynamic>> _feedPosts = [];
   List<Map<String, dynamic>> _topWorkers = [];
-  bool _isLoadingJobs = false; // false so no spinner on startup
+  bool _isLoadingJobs = false;
   RealtimeChannel? _feedChannel;
   RealtimeChannel? _jobsChannel;
   Timer? _refreshTimer;
 
+  // ── Key fix: scaffold key to control drawer ──────────────────
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -39,11 +44,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       await AppTipDialog.showIfEnabled(context);
     });
     _loadData();
-    // Subscribe to realtime feed updates
     _feedChannel = PortfolioService.subscribeToFeed(
       onPostChange: _loadFeedOnly,
     );
-    // Subscribe to new job applications (so customer sees applicants instantly)
     _jobsChannel = Supabase.instance.client
         .channel('my_job_applications')
         .onPostgresChanges(
@@ -55,7 +58,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           },
         )
         .subscribe();
-    // Auto-refresh every 15 seconds silently
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) _loadData(silent: true);
     });
@@ -111,7 +113,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   String _timeAgo(String? createdAt) {
     if (createdAt == null) return '';
-    final diff = DateTime.now().difference(DateTime.parse(createdAt));
+    final diff =
+        DateTime.now().difference(DateTime.parse(createdAt));
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes} mins ago';
     if (diff.inHours < 24) return '${diff.inHours} hrs ago';
@@ -122,6 +125,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // ── Fix: use scaffoldKey so menu button can open drawer ──
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFF0D0D0D),
       drawer: _buildDrawer(),
       body: SafeArea(
@@ -147,35 +152,45 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     child: _buildSkillCategories(),
                   ),
                 ),
-                // Top Rated Workers
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                    child: _buildSectionHeader('Top Rated Workers',
-                        onTap: null),
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    child: _buildSectionHeader('Top Rated Workers', onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const WorkerListScreen()),
+                      );
+                    }),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: _topWorkers.isEmpty
                       ? const SizedBox.shrink()
                       : SizedBox(
-                          height: 140,
+                          height: 160,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 20),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20),
                             itemCount: _topWorkers.length,
                             itemBuilder: (context, i) =>
-                                _buildTopWorkerCard(_topWorkers[i]),
+                                _buildTopWorkerCard(
+                                    _topWorkers[i]),
                           ),
                         ),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                    child: _buildSectionHeader('My Jobs', onTap: () async {
-                      await Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => const MyJobsScreen()));
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                    child: _buildSectionHeader('My Jobs',
+                        onTap: () async {
+                      await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const MyJobsScreen()));
                       _loadData();
                     }),
                   ),
@@ -193,7 +208,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     : _recentJobs.isEmpty
                         ? SliverToBoxAdapter(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20),
                               child: _buildEmptyJobs(),
                             ),
                           )
@@ -202,17 +218,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               height: 160,
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 20),
                                 itemCount: _recentJobs.length,
                                 itemBuilder: (context, i) =>
-                                    _buildJobCardHorizontal(_recentJobs[i]),
+                                    _buildJobCardHorizontal(
+                                        _recentJobs[i]),
                               ),
                             ),
                           ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                    child: _buildSectionHeader('Workers\' Feed', onTap: null),
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                    child: _buildSectionHeader('Workers\' Feed',
+                        onTap: null),
                   ),
                 ),
                 _feedPosts.isEmpty
@@ -225,13 +246,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     : SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, i) => Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20),
                             child: _buildFeedCard(_feedPosts[i]),
                           ),
                           childCount: _feedPosts.length,
                         ),
                       ),
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                const SliverToBoxAdapter(
+                    child: SizedBox(height: 100)),
               ],
             ),
           ),
@@ -249,167 +272,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         backgroundColor: const Color(0xFFFF6B00),
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Post Job',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, {VoidCallback? onTap}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(title,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w700)),
-        if (onTap != null)
-          GestureDetector(
-            onTap: onTap,
-            child: const Text('See all',
-                style: TextStyle(color: Color(0xFFFF6B00), fontSize: 13)),
-          ),
-      ],
-    );
-  }
-
-  Widget _miniStat(String value, String label, Color color) {
-    return Column(
-      children: [
-        Text(value,
             style: TextStyle(
-                color: color, fontSize: 18, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(
-                color: Color(0xFF888888), fontSize: 10)),
-      ],
-    );
-  }
-
-  Widget _statDiv() =>
-      Container(width: 1, height: 28, color: const Color(0xFF2A2A2A));
-
-  Widget _buildJobCardHorizontal(Map<String, dynamic> job) {
-    final status = job['status'] ?? 'open';
-    Color statusColor = const Color(0xFFFF6B00);
-    if (status == 'accepted') statusColor = const Color(0xFF4CAF50);
-    if (status == 'completed') statusColor = const Color(0xFF888888);
-    if (status == 'expired') statusColor = const Color(0xFFE53935);
-
-    int applicants = 0;
-    final appData = job['job_applications'];
-    if (appData is List && appData.isNotEmpty) {
-      applicants = appData[0]['count'] ?? 0;
-    }
-
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const MyJobsScreen()));
-        _loadData();
-      },
-      child: Container(
-        width: 220,
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: statusColor.withOpacity(0.4)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    status == 'open'
-                        ? '📋 Open'
-                        : status == 'accepted'
-                            ? '🔨 Active'
-                            : status == 'expired'
-                                ? '⏰ Expired'
-                                : '✅ Done',
-                    style: TextStyle(
-                        color: statusColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ),
-                const Spacer(),
-                Text(_timeAgo(job['created_at']),
-                    style: const TextStyle(
-                        color: Color(0xFF555555), fontSize: 10)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(job['title'] ?? '',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
-            const Spacer(),
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF252525),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(job['skill_needed'] ?? '',
-                      style: const TextStyle(
-                          color: Color(0xFF888888), fontSize: 10)),
-                ),
-                const Spacer(),
-                Text('$applicants applied',
-                    style: const TextStyle(
-                        color: Color(0xFF555555), fontSize: 10)),
-              ],
-            ),
-          ],
-        ),
+                color: Colors.white,
+                fontWeight: FontWeight.w700)),
       ),
     );
   }
 
-  Widget _buildEmptyFeed() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
-      ),
-      child: const Column(
-        children: [
-          Icon(Icons.photo_library_outlined,
-              color: Color(0xFF555555), size: 40),
-          SizedBox(height: 10),
-          Text('No worker posts yet',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14)),
-          SizedBox(height: 4),
-          Text('Workers will share their work here',
-              style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
+  // ─── Header ───────────────────────────────────────────────────
   Widget _buildHeader() {
     final name = _profile?['name'] ?? 'there';
     final avatarUrl = _profile?['avatar_url'];
@@ -417,9 +287,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       padding: const EdgeInsets.fromLTRB(16, 16, 20, 0),
       child: Row(
         children: [
-          // Menu button
+          // ── Fix: use _scaffoldKey to open drawer ──
           GestureDetector(
-            onTap: () => Scaffold.of(context).openDrawer(),
+            onTap: () => _scaffoldKey.currentState?.openDrawer(),
             child: Container(
               width: 40,
               height: 40,
@@ -466,17 +336,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ],
           ),
           const Spacer(),
-          // Avatar
           GestureDetector(
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              MaterialPageRoute(
+                  builder: (_) => const ProfileScreen()),
             ),
             child: CircleAvatar(
               radius: 20,
               backgroundColor: const Color(0xFF1A1A1A),
-              backgroundImage:
-                  avatarUrl != null ? NetworkImage(avatarUrl) : null,
+              backgroundImage: avatarUrl != null
+                  ? NetworkImage(avatarUrl)
+                  : null,
               child: avatarUrl == null
                   ? const Icon(Icons.person,
                       color: Color(0xFF888888), size: 20)
@@ -488,6 +359,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  // ─── Drawer ───────────────────────────────────────────────────
   Widget _buildDrawer() {
     final name = _profile?['name'] ?? '';
     final email = AuthService.currentEmail ?? '';
@@ -503,7 +375,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
                 border: Border(
-                    bottom: BorderSide(color: Color(0xFF1F1F1F))),
+                    bottom:
+                        BorderSide(color: Color(0xFF1F1F1F))),
               ),
               child: Row(
                 children: [
@@ -516,7 +389,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         : null,
                     child: avatarUrl == null
                         ? Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            name.isNotEmpty
+                                ? name[0].toUpperCase()
+                                : '?',
                             style: const TextStyle(
                                 color: Color(0xFFFF6B00),
                                 fontSize: 22,
@@ -526,7 +401,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         Text(name,
                             style: const TextStyle(
@@ -535,15 +411,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 fontSize: 16)),
                         Text(email,
                             style: const TextStyle(
-                                color: Color(0xFF888888), fontSize: 12),
+                                color: Color(0xFF888888),
+                                fontSize: 12),
                             overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 4),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFF6B00).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            color: const Color(0xFFFF6B00)
+                                .withOpacity(0.15),
+                            borderRadius:
+                                BorderRadius.circular(6),
                           ),
                           child: const Text('Customer',
                               style: TextStyle(
@@ -584,7 +463,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               fontSize: 16)),
                       Text('Workers On Demand',
                           style: TextStyle(
-                              color: Color(0xFF888888), fontSize: 10)),
+                              color: Color(0xFF888888),
+                              fontSize: 10)),
                     ],
                   ),
                 ],
@@ -596,64 +476,131 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             // Menu items
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  _drawerItem(Icons.home_outlined, 'Home', () => Navigator.pop(context)),
-                  _drawerItem(Icons.work_outline, 'My Jobs', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => const MyJobsScreen()));
-                  }),
-                  _drawerItem(Icons.chat_bubble_outline, 'Messages', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => const MessagesScreen()));
-                  }),
-                  _drawerItem(Icons.person_outline, 'My Profile', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => const ProfileScreen()));
-                  }),
+                  _drawerItem(
+                    Icons.home_outlined,
+                    'Home',
+                    () => Navigator.pop(context),
+                  ),
+                  _drawerItem(
+                    Icons.work_outline,
+                    'My Jobs',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const MyJobsScreen()));
+                    },
+                  ),
+                  _drawerItem(
+                    Icons.chat_bubble_outline,
+                    'Messages',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const MessagesScreen()));
+                    },
+                  ),
+                  _drawerItem(
+                    Icons.person_outline,
+                    'My Profile',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const ProfileScreen()));
+                    },
+                  ),
                   const Divider(color: Color(0xFF1F1F1F)),
-                  _drawerItem(Icons.add_circle_outline, 'Post a Job', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => const PostJobScreen()));
-                  }),
+                  _drawerItem(
+                    Icons.add_circle_outline,
+                    'Post a Job',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const PostJobScreen()));
+                    },
+                  ),
                   const Divider(color: Color(0xFF1F1F1F)),
-                  _drawerItem(Icons.help_outline, 'Help & Support', () {
-                    Navigator.pop(context);
-                  }),
-                  _drawerItem(Icons.description_outlined, 'Terms & Conditions', () {
-                    Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => const ProfileScreen()));
-                  }),
-                  _drawerItem(Icons.settings_outlined, 'Settings', () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                    );
-                  }),
-                  _drawerItem(Icons.info_outline, 'About MoKa', () {
-                    Navigator.pop(context);
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'MoKa',
-                      applicationVersion: '1.0.0',
-                      applicationIcon: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF6B00),
-                          borderRadius: BorderRadius.circular(12),
+
+                  // ── Settings — properly wired ──
+                  _drawerItem(
+                    Icons.settings_outlined,
+                    'Settings',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      );
+                    },
+                  ),
+                  _drawerItem(
+                    Icons.leaderboard_outlined,
+                    'Leaderboard',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                      );
+                    },
+                  ),
+                  const Divider(color: Color(0xFF1F1F1F)),
+                  _drawerItem(
+                    Icons.help_outline,
+                    'Help & Support',
+                    () => Navigator.pop(context),
+                  ),
+                  _drawerItem(
+                    Icons.description_outlined,
+                    'Terms & Conditions',
+                    () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const ProfileScreen()));
+                    },
+                  ),
+                  _drawerItem(
+                    Icons.info_outline,
+                    'About MoKa',
+                    () {
+                      Navigator.pop(context);
+                      showAboutDialog(
+                        context: context,
+                        applicationName: 'MoKa',
+                        applicationVersion: '1.0.0',
+                        applicationIcon: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B00),
+                            borderRadius:
+                                BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                              Icons.handyman_rounded,
+                              color: Colors.white,
+                              size: 26),
                         ),
-                        child: const Icon(Icons.handyman_rounded,
-                            color: Colors.white, size: 26),
-                      ),
-                    );
-                  }),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -661,16 +608,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             // Logout
             Container(
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFF1F1F1F))),
+                border: Border(
+                    top: BorderSide(color: Color(0xFF1F1F1F))),
               ),
               child: _drawerItem(
                 Icons.logout,
                 'Log Out',
                 () async {
                   Navigator.pop(context);
+                  await NotificationService.clearTokenOnLogout();
                   await AuthService.logout();
                   if (!mounted) return;
-                  Navigator.pushReplacementNamed(context, '/login');
+                  Navigator.pushReplacementNamed(
+                      context, '/login');
                 },
                 color: const Color(0xFFE53935),
               ),
@@ -681,19 +631,48 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  Widget _drawerItem(IconData icon, String label, VoidCallback onTap,
-      {Color color = const Color(0xFFCCCCCC)}) {
+  Widget _drawerItem(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    Color color = const Color(0xFFCCCCCC),
+  }) {
     return ListTile(
       leading: Icon(icon, color: color, size: 20),
       title: Text(label,
           style: TextStyle(
-              color: color, fontSize: 14, fontWeight: FontWeight.w500)),
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w500)),
       onTap: onTap,
       dense: true,
       horizontalTitleGap: 8,
     );
   }
 
+  // ─── Section header ───────────────────────────────────────────
+  Widget _buildSectionHeader(String title,
+      {VoidCallback? onTap}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(title,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700)),
+        if (onTap != null)
+          GestureDetector(
+            onTap: onTap,
+            child: const Text('See all',
+                style: TextStyle(
+                    color: Color(0xFFFF6B00), fontSize: 13)),
+          ),
+      ],
+    );
+  }
+
+  // ─── Post job banner ──────────────────────────────────────────
   Widget _buildPostJobBanner() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -733,7 +712,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   onPressed: () async {
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const PostJobScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const PostJobScreen()),
                     );
                     _loadData();
                   },
@@ -747,17 +727,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     elevation: 0,
                   ),
                   child: const Text('Post Now',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.handyman_rounded, color: Colors.white30, size: 80),
+          const Icon(Icons.handyman_rounded,
+              color: Colors.white30, size: 80),
         ],
       ),
     );
   }
 
+  // ─── Skill categories ─────────────────────────────────────────
   Widget _buildSkillCategories() {
     final categories = [
       {'icon': Icons.plumbing, 'label': 'Plumber'},
@@ -783,7 +766,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate:
+              const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
@@ -795,7 +779,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               onTap: () async {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const PostJobScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const PostJobScreen()),
                 );
                 _loadData();
               },
@@ -803,13 +788,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1A1A1A),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2A2A2A)),
+                  border:
+                      Border.all(color: const Color(0xFF2A2A2A)),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(categories[i]['icon'] as IconData,
-                        color: const Color(0xFFFF6B00), size: 28),
+                    Icon(
+                        categories[i]['icon'] as IconData,
+                        color: const Color(0xFFFF6B00),
+                        size: 28),
                     const SizedBox(height: 6),
                     Text(
                       categories[i]['label'] as String,
@@ -829,6 +817,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  // ─── Top worker card — with medal ─────────────────────────────
   Widget _buildTopWorkerCard(Map<String, dynamic> worker) {
     final name = worker['name'] ?? '';
     final skill = worker['skill'] ?? '';
@@ -836,6 +825,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final avatarUrl = worker['avatar_url'];
     final isOnline = worker['is_online'] == true;
     final workerId = worker['id'];
+    final medal = rating > 0 ? getMedal(rating) : null;
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -849,56 +839,92 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         margin: const EdgeInsets.only(right: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
+          // Subtle medal tint
+          color: medal != null
+              ? Color.lerp(
+                  const Color(0xFF1A1A1A),
+                  medal.backgroundColor,
+                  0.2,
+                )
+              : const Color(0xFF1A1A1A),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isOnline
-                ? const Color(0xFF4CAF50).withOpacity(0.4)
-                : const Color(0xFF2A2A2A),
+            color: medal != null
+                ? medal.accentColor.withOpacity(0.35)
+                : isOnline
+                    ? const Color(0xFF4CAF50).withOpacity(0.4)
+                    : const Color(0xFF2A2A2A),
           ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Avatar with online indicator
+            // Avatar with medal overlay
             Stack(
+              clipBehavior: Clip.none,
               children: [
                 CircleAvatar(
-                  radius: 28,
-                  backgroundColor:
-                      const Color(0xFFFF6B00).withOpacity(0.15),
-                  backgroundImage:
-                      avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                  radius: 26,
+                  backgroundColor: medal != null
+                      ? medal.accentColor.withOpacity(0.15)
+                      : const Color(0xFFFF6B00).withOpacity(0.15),
+                  backgroundImage: avatarUrl != null
+                      ? NetworkImage(avatarUrl)
+                      : null,
                   child: avatarUrl == null
                       ? Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : '?',
-                          style: const TextStyle(
-                            color: Color(0xFFFF6B00),
-                            fontSize: 20,
+                          name.isNotEmpty
+                              ? name[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            color: medal?.accentColor ??
+                                const Color(0xFFFF6B00),
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
                           ),
                         )
                       : null,
                 ),
+
+                // Online dot
                 if (isOnline)
                   Positioned(
                     bottom: 1,
                     right: 1,
                     child: Container(
-                      width: 12,
-                      height: 12,
+                      width: 11,
+                      height: 11,
                       decoration: BoxDecoration(
                         color: const Color(0xFF4CAF50),
                         shape: BoxShape.circle,
                         border: Border.all(
-                            color: const Color(0xFF1A1A1A), width: 2),
+                            color: const Color(0xFF1A1A1A),
+                            width: 2),
                       ),
+                    ),
+                  ),
+
+                // Medal badge top-left
+                if (medal != null)
+                  Positioned(
+                    top: -4,
+                    left: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D0D0D),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: medal.accentColor, width: 1),
+                      ),
+                      child: Text(medal.emoji,
+                          style: const TextStyle(fontSize: 9)),
                     ),
                   ),
               ],
             ),
             const SizedBox(height: 8),
-            // Name
+
             Text(
               name,
               style: const TextStyle(
@@ -911,7 +937,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 2),
-            // Skill
             Text(
               skill,
               style: const TextStyle(
@@ -921,17 +946,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
-            // Rating
+
+            // Rating with medal color
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.star_rounded,
-                    color: Color(0xFFFF6B00), size: 12),
+                Icon(
+                  Icons.star_rounded,
+                  color: medal?.starColor ?? const Color(0xFFFF6B00),
+                  size: 12,
+                ),
                 const SizedBox(width: 2),
                 Text(
                   rating.toStringAsFixed(1),
-                  style: const TextStyle(
-                    color: Color(0xFFFF6B00),
+                  style: TextStyle(
+                    color: medal?.accentColor ??
+                        const Color(0xFFFF6B00),
                     fontWeight: FontWeight.w700,
                     fontSize: 11,
                   ),
@@ -944,6 +974,105 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  // ─── Job card horizontal ──────────────────────────────────────
+  Widget _buildJobCardHorizontal(Map<String, dynamic> job) {
+    final status = job['status'] ?? 'open';
+    Color statusColor = const Color(0xFFFF6B00);
+    if (status == 'accepted') statusColor = const Color(0xFF4CAF50);
+    if (status == 'completed')
+      statusColor = const Color(0xFF888888);
+    if (status == 'expired') statusColor = const Color(0xFFE53935);
+
+    int applicants = 0;
+    final appData = job['job_applications'];
+    if (appData is List && appData.isNotEmpty) {
+      applicants = appData[0]['count'] ?? 0;
+    }
+
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(context,
+            MaterialPageRoute(
+                builder: (_) => const MyJobsScreen()));
+        _loadData();
+      },
+      child: Container(
+        width: 220,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(16),
+          border:
+              Border.all(color: statusColor.withOpacity(0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    status == 'open'
+                        ? '📋 Open'
+                        : status == 'accepted'
+                            ? '🔨 Active'
+                            : status == 'expired'
+                                ? '⏰ Expired'
+                                : '✅ Done',
+                    style: TextStyle(
+                        color: statusColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const Spacer(),
+                Text(_timeAgo(job['created_at']),
+                    style: const TextStyle(
+                        color: Color(0xFF555555), fontSize: 10)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(job['title'] ?? '',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+            const Spacer(),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF252525),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(job['skill_needed'] ?? '',
+                      style: const TextStyle(
+                          color: Color(0xFF888888), fontSize: 10)),
+                ),
+                const Spacer(),
+                Text('$applicants applied',
+                    style: const TextStyle(
+                        color: Color(0xFF555555), fontSize: 10)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Empty states ─────────────────────────────────────────────
   Widget _buildEmptyJobs() {
     return Container(
       width: double.infinity,
@@ -953,22 +1082,56 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF2A2A2A)),
       ),
-      child: Column(
+      child: const Column(
         children: [
-          const Icon(Icons.work_off_outlined, color: Color(0xFF555555), size: 40),
-          const SizedBox(height: 10),
-          const Text('No jobs posted yet',
-              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          const Text('Tap Post Job to get started',
-              style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+          Icon(Icons.work_off_outlined,
+              color: Color(0xFF555555), size: 40),
+          SizedBox(height: 10),
+          Text('No jobs posted yet',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600)),
+          SizedBox(height: 6),
+          Text('Tap Post Job to get started',
+              style: TextStyle(
+                  color: Color(0xFF888888), fontSize: 13)),
         ],
       ),
     );
   }
 
+  Widget _buildEmptyFeed() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.photo_library_outlined,
+              color: Color(0xFF555555), size: 40),
+          SizedBox(height: 10),
+          Text('No worker posts yet',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14)),
+          SizedBox(height: 4),
+          Text('Workers will share their work here',
+              style: TextStyle(
+                  color: Color(0xFF888888), fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  // ─── Feed card ────────────────────────────────────────────────
   Widget _buildFeedCard(Map<String, dynamic> post) {
-    final worker = post['profiles'] as Map<String, dynamic>?;
+    final worker =
+        post['profiles'] as Map<String, dynamic>?;
     final workerName = worker?['name'] ?? 'Worker';
     final workerSkill = worker?['skill'] ?? '';
     final workerId = worker?['id'];
@@ -977,8 +1140,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final commentsCount = post['comments_count'] ?? 0;
 
     return GestureDetector(
-      onTap: () => Navigator.push(context,
-        MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => PostDetailScreen(post: post)),
       ).then((_) => _loadFeedOnly()),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -990,13 +1155,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Worker header
             GestureDetector(
               onTap: () {
                 if (workerId != null) {
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => PublicProfileScreen(userId: workerId),
-                  ));
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => PublicProfileScreen(
+                              userId: workerId)));
                 }
               },
               child: Padding(
@@ -1005,40 +1171,55 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   children: [
                     CircleAvatar(
                       radius: 18,
-                      backgroundColor: const Color(0xFFFF6B00).withOpacity(0.15),
-                      backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                      backgroundColor: const Color(0xFFFF6B00)
+                          .withOpacity(0.15),
+                      backgroundImage: avatarUrl != null
+                          ? NetworkImage(avatarUrl)
+                          : null,
                       child: avatarUrl == null
                           ? Text(workerName[0].toUpperCase(),
-                              style: const TextStyle(color: Color(0xFFFF6B00), fontWeight: FontWeight.w700))
+                              style: const TextStyle(
+                                  color: Color(0xFFFF6B00),
+                                  fontWeight: FontWeight.w700))
                           : null,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
                         children: [
                           Text(workerName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13)),
                           Text(workerSkill,
-                              style: const TextStyle(color: Color(0xFF888888), fontSize: 11)),
+                              style: const TextStyle(
+                                  color: Color(0xFF888888),
+                                  fontSize: 11)),
                         ],
                       ),
                     ),
                     if (post['skill'] != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFF6B00).withOpacity(0.15),
+                          color: const Color(0xFFFF6B00)
+                              .withOpacity(0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(post['skill'],
-                            style: const TextStyle(color: Color(0xFFFF6B00), fontSize: 10, fontWeight: FontWeight.w600)),
+                            style: const TextStyle(
+                                color: Color(0xFFFF6B00),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600)),
                       ),
                   ],
                 ),
               ),
             ),
-            // Image
             ClipRRect(
               child: Image.network(
                 post['image_url'],
@@ -1048,11 +1229,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 errorBuilder: (_, __, ___) => Container(
                   height: 220,
                   color: const Color(0xFF252525),
-                  child: const Icon(Icons.image_not_supported, color: Color(0xFF555555), size: 40),
+                  child: const Icon(Icons.image_not_supported,
+                      color: Color(0xFF555555), size: 40),
                 ),
               ),
             ),
-            // Caption + stats
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -1060,22 +1241,34 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 children: [
                   if (post['caption'] != null)
                     Text(post['caption'],
-                        style: const TextStyle(color: Color(0xFFCCCCCC), fontSize: 13),
+                        style: const TextStyle(
+                            color: Color(0xFFCCCCCC),
+                            fontSize: 13),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Icon(Icons.favorite_border_rounded, color: Color(0xFF888888), size: 18),
+                      const Icon(Icons.favorite_border_rounded,
+                          color: Color(0xFF888888), size: 18),
                       const SizedBox(width: 4),
-                      Text('$likesCount', style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+                      Text('$likesCount',
+                          style: const TextStyle(
+                              color: Color(0xFF888888),
+                              fontSize: 12)),
                       const SizedBox(width: 14),
-                      const Icon(Icons.chat_bubble_outline, color: Color(0xFF888888), size: 16),
+                      const Icon(Icons.chat_bubble_outline,
+                          color: Color(0xFF888888), size: 16),
                       const SizedBox(width: 4),
-                      Text('$commentsCount', style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+                      Text('$commentsCount',
+                          style: const TextStyle(
+                              color: Color(0xFF888888),
+                              fontSize: 12)),
                       const Spacer(),
                       const Text('Tap to view & like',
-                          style: TextStyle(color: Color(0xFF555555), fontSize: 11)),
+                          style: TextStyle(
+                              color: Color(0xFF555555),
+                              fontSize: 11)),
                     ],
                   ),
                 ],
@@ -1087,11 +1280,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  // ─── Bottom nav ───────────────────────────────────────────────
   Widget _buildBottomNav() {
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF111111),
-        border: Border(top: BorderSide(color: Color(0xFF1F1F1F))),
+        border:
+            Border(top: BorderSide(color: Color(0xFF1F1F1F))),
       ),
       child: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -1099,19 +1294,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           setState(() => _currentIndex = i);
           if (i == 1) {
             Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const MyJobsScreen()),
-            );
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const MyJobsScreen()));
           } else if (i == 2) {
             Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const MessagesScreen()),
-            );
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const MessagesScreen()));
           } else if (i == 3) {
             Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-            );
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ProfileScreen()));
           }
         },
         backgroundColor: Colors.transparent,

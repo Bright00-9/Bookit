@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/portfolio_service.dart';
+import '../models/worker_medal.dart';
 import 'public_profile_screen.dart';
 
 class PostDetailScreen extends StatefulWidget {
@@ -9,7 +10,8 @@ class PostDetailScreen extends StatefulWidget {
   const PostDetailScreen({super.key, required this.post});
 
   @override
-  State<PostDetailScreen> createState() => _PostDetailScreenState();
+  State<PostDetailScreen> createState() =>
+      _PostDetailScreenState();
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
@@ -30,14 +32,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _likesCount = widget.post['likes_count'] ?? 0;
     _commentsCount = widget.post['comments_count'] ?? 0;
     _loadData();
-    // Subscribe to realtime updates for this post
     _realtimeChannel = PortfolioService.subscribeToPost(
       postId: widget.post['id'],
       onUpdate: (updated) {
         if (mounted) {
           setState(() {
-            _likesCount = updated['likes_count'] ?? _likesCount;
-            _commentsCount = updated['comments_count'] ?? _commentsCount;
+            _likesCount =
+                updated['likes_count'] ?? _likesCount;
+            _commentsCount =
+                updated['comments_count'] ?? _commentsCount;
           });
         }
       },
@@ -54,9 +57,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoadingComments = true);
     try {
-      final comments =
-          await PortfolioService.getComments(widget.post['id']);
-      final liked = await PortfolioService.hasLiked(widget.post['id']);
+      final comments = await PortfolioService.getComments(
+          widget.post['id']);
+      final liked =
+          await PortfolioService.hasLiked(widget.post['id']);
       if (mounted) {
         setState(() {
           _comments = comments;
@@ -66,7 +70,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     } catch (e) {
       debugPrint('Error loading post data: $e');
     } finally {
-      if (mounted) setState(() => _isLoadingComments = false);
+      if (mounted)
+        setState(() => _isLoadingComments = false);
     }
   }
 
@@ -95,19 +100,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
       _commentController.clear();
       await _loadData();
-      if (mounted) setState(() => _commentsCount = _comments.length);
+      if (mounted)
+        setState(() => _commentsCount = _comments.length);
     } catch (e) {
       debugPrint('Error submitting comment: $e');
     } finally {
-      if (mounted) setState(() => _isSubmittingComment = false);
+      if (mounted)
+        setState(() => _isSubmittingComment = false);
     }
   }
 
   Future<void> _deleteComment(String commentId) async {
     try {
       await PortfolioService.deleteComment(commentId);
-      setState(() =>
-          _comments.removeWhere((c) => c['id'] == commentId));
+      setState(() => _comments
+          .removeWhere((c) => c['id'] == commentId));
     } catch (e) {
       debugPrint('Error deleting comment: $e');
     }
@@ -115,7 +122,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   String _timeAgo(String? ts) {
     if (ts == null) return '';
-    final diff = DateTime.now().difference(DateTime.parse(ts));
+    final diff =
+        DateTime.now().difference(DateTime.parse(ts));
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
@@ -125,11 +133,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final worker = widget.post['profiles'] as Map<String, dynamic>?;
+    final worker =
+        widget.post['profiles'] as Map<String, dynamic>?;
     final workerName = worker?['name'] ?? 'Worker';
     final workerSkill = worker?['skill'] ?? '';
     final avatarUrl = worker?['avatar_url'];
     final workerId = worker?['id'];
+    final rating =
+        (worker?['rating'] ?? 0.0).toDouble();
+    final medal = rating > 0 ? getMedal(rating) : null;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
@@ -154,15 +166,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Worker header
+
+                  // ── Worker header ──────────────────────
                   GestureDetector(
                     onTap: () {
                       if (workerId != null) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                PublicProfileScreen(userId: workerId),
+                            builder: (_) => PublicProfileScreen(
+                                userId: workerId),
                           ),
                         );
                       }
@@ -171,50 +184,186 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: const Color(0xFFFF6B00)
-                                .withOpacity(0.15),
-                            backgroundImage: avatarUrl != null
-                                ? NetworkImage(avatarUrl)
-                                : null,
-                            child: avatarUrl == null
-                                ? Text(
-                                    workerName[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Color(0xFFFF6B00),
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          // Avatar with medal ring
+                          Stack(
+                            clipBehavior: Clip.none,
                             children: [
-                              Text(workerName,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14)),
-                              Text(workerSkill,
-                                  style: const TextStyle(
-                                      color: Color(0xFF888888),
-                                      fontSize: 12)),
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: medal?.accentColor ??
+                                        const Color(0xFFFF6B00)
+                                            .withOpacity(0.4),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: CircleAvatar(
+                                  radius: 19,
+                                  backgroundColor: medal != null
+                                      ? medal.accentColor
+                                          .withOpacity(0.15)
+                                      : const Color(0xFFFF6B00)
+                                          .withOpacity(0.15),
+                                  backgroundImage: avatarUrl !=
+                                          null
+                                      ? NetworkImage(avatarUrl)
+                                      : null,
+                                  child: avatarUrl == null
+                                      ? Text(
+                                          workerName[0]
+                                              .toUpperCase(),
+                                          style: TextStyle(
+                                            color: medal
+                                                    ?.accentColor ??
+                                                const Color(
+                                                    0xFFFF6B00),
+                                            fontWeight:
+                                                FontWeight.w700,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                              // Medal badge
+                              if (medal != null)
+                                Positioned(
+                                  bottom: -3,
+                                  right: -3,
+                                  child: Container(
+                                    padding:
+                                        const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(
+                                          0xFF0D0D0D),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color:
+                                              medal.accentColor,
+                                          width: 1),
+                                    ),
+                                    child: Text(medal.emoji,
+                                        style: const TextStyle(
+                                            fontSize: 9)),
+                                  ),
+                                ),
                             ],
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 10),
+
+                          // Name + skill + medal
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(workerName,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight:
+                                                FontWeight.w700,
+                                            fontSize: 14)),
+                                    // Medal badge next to name
+                                    if (medal != null) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding:
+                                            const EdgeInsets
+                                                .symmetric(
+                                                horizontal: 5,
+                                                vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: medal.accentColor
+                                              .withOpacity(0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                                  5),
+                                          border: Border.all(
+                                              color: medal
+                                                  .accentColor
+                                                  .withOpacity(
+                                                      0.4)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize:
+                                              MainAxisSize.min,
+                                          children: [
+                                            Text(medal.emoji,
+                                                style:
+                                                    const TextStyle(
+                                                        fontSize:
+                                                            9)),
+                                            const SizedBox(
+                                                width: 2),
+                                            Text(
+                                              medal.label,
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight:
+                                                    FontWeight.w700,
+                                                color: medal
+                                                    .accentColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Text(workerSkill,
+                                        style: const TextStyle(
+                                            color:
+                                                Color(0xFF888888),
+                                            fontSize: 12)),
+                                    // Rating
+                                    if (rating > 0) ...[
+                                      const SizedBox(width: 6),
+                                      Icon(Icons.star_rounded,
+                                          size: 12,
+                                          color: medal
+                                                  ?.starColor ??
+                                              const Color(
+                                                  0xFFFF6B00)),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        rating.toStringAsFixed(1),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: medal
+                                                  ?.accentColor ??
+                                              const Color(
+                                                  0xFFFF6B00),
+                                          fontWeight:
+                                              FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+
                           Text(
                             _timeAgo(widget.post['created_at']),
                             style: const TextStyle(
-                                color: Color(0xFF555555), fontSize: 12),
+                                color: Color(0xFF555555),
+                                fontSize: 12),
                           ),
                         ],
                       ),
                     ),
                   ),
 
-                  // Post image
+                  // ── Post image ─────────────────────────
                   Image.network(
                     widget.post['image_url'],
                     width: double.infinity,
@@ -222,20 +371,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     errorBuilder: (_, __, ___) => Container(
                       height: 200,
                       color: const Color(0xFF1A1A1A),
-                      child: const Icon(Icons.image_not_supported,
-                          color: Color(0xFF555555), size: 40),
+                      child: const Icon(
+                          Icons.image_not_supported,
+                          color: Color(0xFF555555),
+                          size: 40),
                     ),
                   ),
 
-                  // Like + comment actions
+                  // ── Like + comment actions ─────────────
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(
+                        16, 12, 16, 0),
                     child: Row(
                       children: [
                         GestureDetector(
                           onTap: _toggleLike,
                           child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
+                            duration: const Duration(
+                                milliseconds: 200),
                             child: Icon(
                               _isLiked
                                   ? Icons.favorite_rounded
@@ -275,7 +428,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFFF6B00)
                                   .withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius:
+                                  BorderRadius.circular(8),
                             ),
                             child: Text(
                               widget.post['skill'],
@@ -289,10 +443,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     ),
                   ),
 
-                  // Caption
+                  // ── Caption ────────────────────────────
                   if (widget.post['caption'] != null)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                      padding: const EdgeInsets.fromLTRB(
+                          16, 10, 16, 0),
                       child: RichText(
                         text: TextSpan(
                           children: [
@@ -306,16 +461,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             TextSpan(
                               text: widget.post['caption'],
                               style: const TextStyle(
-                                  color: Color(0xFFCCCCCC), fontSize: 14),
+                                  color: Color(0xFFCCCCCC),
+                                  fontSize: 14),
                             ),
                           ],
                         ),
                       ),
                     ),
 
-                  // Comments
+                  // ── Comments header ────────────────────
                   const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
+                    padding:
+                        EdgeInsets.fromLTRB(16, 20, 16, 8),
                     child: Text('Comments',
                         style: TextStyle(
                             color: Colors.white,
@@ -333,10 +490,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     )
                   else if (_comments.isEmpty)
                     const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Text('No comments yet. Be the first!',
+                      padding:
+                          EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Text(
+                          'No comments yet. Be the first!',
                           style: TextStyle(
-                              color: Color(0xFF888888), fontSize: 13)),
+                              color: Color(0xFF888888),
+                              fontSize: 13)),
                     )
                   else
                     ..._comments.map((c) => _buildComment(c)),
@@ -347,7 +507,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
           ),
 
-          // Comment input
+          // ── Comment input ──────────────────────────────
           _buildCommentInput(),
         ],
       ),
@@ -359,7 +519,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         comment['profiles'] as Map<String, dynamic>?;
     final name = user?['name'] ?? 'User';
     final avatarUrl = user?['avatar_url'];
-    final isMyComment = comment['user_id'] == _currentUserId;
+    final isMyComment =
+        comment['user_id'] == _currentUserId;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -370,8 +531,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             radius: 16,
             backgroundColor:
                 const Color(0xFFFF6B00).withOpacity(0.15),
-            backgroundImage:
-                avatarUrl != null ? NetworkImage(avatarUrl) : null,
+            backgroundImage: avatarUrl != null
+                ? NetworkImage(avatarUrl)
+                : null,
             child: avatarUrl == null
                 ? Text(name[0].toUpperCase(),
                     style: const TextStyle(
@@ -393,15 +555,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             fontWeight: FontWeight.w700,
                             fontSize: 13)),
                     const SizedBox(width: 6),
-                    Text(_timeAgo(comment['created_at']),
+                    Text(
+                        _timeAgo(comment['created_at']),
                         style: const TextStyle(
-                            color: Color(0xFF555555), fontSize: 11)),
+                            color: Color(0xFF555555),
+                            fontSize: 11)),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(comment['content'] ?? '',
                     style: const TextStyle(
-                        color: Color(0xFFCCCCCC), fontSize: 13)),
+                        color: Color(0xFFCCCCCC),
+                        fontSize: 13)),
               ],
             ),
           ),
@@ -424,7 +589,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       padding: const EdgeInsets.fromLTRB(16, 10, 12, 24),
       decoration: const BoxDecoration(
         color: Color(0xFF111111),
-        border: Border(top: BorderSide(color: Color(0xFF1F1F1F))),
+        border: Border(
+            top: BorderSide(color: Color(0xFF1F1F1F))),
       ),
       child: Row(
         children: [
@@ -433,17 +599,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1A1A),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFF2A2A2A)),
+                border:
+                    Border.all(color: const Color(0xFF2A2A2A)),
               ),
               child: TextField(
                 controller: _commentController,
-                style:
-                    const TextStyle(color: Colors.white, fontSize: 14),
+                style: const TextStyle(
+                    color: Colors.white, fontSize: 14),
                 maxLines: null,
-                textCapitalization: TextCapitalization.sentences,
+                textCapitalization:
+                    TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   hintText: 'Add a comment...',
-                  hintStyle: TextStyle(color: Color(0xFF555555)),
+                  hintStyle:
+                      TextStyle(color: Color(0xFF555555)),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(
                       horizontal: 18, vertical: 10),
@@ -453,7 +622,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
           const SizedBox(width: 10),
           GestureDetector(
-            onTap: _isSubmittingComment ? null : _submitComment,
+            onTap: _isSubmittingComment
+                ? null
+                : _submitComment,
             child: Container(
               width: 42,
               height: 42,
@@ -465,7 +636,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ? const Padding(
                       padding: EdgeInsets.all(12),
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
+                          color: Colors.white,
+                          strokeWidth: 2))
                   : const Icon(Icons.send_rounded,
                       color: Colors.white, size: 18),
             ),

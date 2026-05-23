@@ -105,6 +105,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+
+  // Replace _changePassword() with:
   Future<void> _changePassword() async {
     if (_newPasswordCtrl.text != _confirmPasswordCtrl.text) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,13 +116,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     if (_newPasswordCtrl.text.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password must be at least 6 characters')),
+        const SnackBar(
+            content:
+                Text('Password must be at least 6 characters')),
       );
       return;
     }
     try {
-      await _service.changePassword(_newPasswordCtrl.text);
-      _oldPasswordCtrl.clear();
+      await AuthService.changePassword(_newPasswordCtrl.text);
       _newPasswordCtrl.clear();
       _confirmPasswordCtrl.clear();
       if (mounted) {
@@ -134,6 +137,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SnackBar(content: Text('Failed: $e')),
         );
       }
+    }
+  }
+
+  // Replace _confirmDeleteAccount() delete logic with:
+  try {
+    await AuthService.deleteAccount();
+    if (mounted) {
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil('/login', (_) => false);
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete account: $e')),
+      );
     }
   }
 

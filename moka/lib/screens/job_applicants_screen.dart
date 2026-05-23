@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import '../services/job_service.dart';
+import '../services/acceptance_fee_service.dart';
+import '../models/worker_medal.dart';
+import '../widgets/worker_medal_badge.dart';
+import '../widgets/accept_worker_sheet.dart';
 import 'public_profile_screen.dart';
 
 class JobApplicantsScreen extends StatefulWidget {
@@ -19,7 +23,6 @@ class JobApplicantsScreen extends StatefulWidget {
 class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   List<Map<String, dynamic>> _applicants = [];
   bool _isLoading = true;
-  String? _acceptingId;
 
   @override
   void initState() {
@@ -36,84 +39,6 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       debugPrint('Error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _acceptWorker(Map<String, dynamic> application) async {
-    final applicationId = application['id'];
-    final workerId = application['worker_id'];
-    final worker = application['profiles'] as Map<String, dynamic>?;
-    final workerName = worker?['name'] ?? 'Worker';
-
-    // Confirm dialog
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Accept Worker',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
-        content: Text(
-          'Accept $workerName for this job? This will notify them and start the job.',
-          style: const TextStyle(color: Color(0xFF888888)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: Color(0xFF888888))),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Accept'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _acceptingId = applicationId);
-    try {
-      await JobService.acceptWorker(
-        jobId: widget.jobId,
-        workerId: workerId,
-        applicationId: applicationId,
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$workerName accepted! Job is now active 🔨'),
-          backgroundColor: const Color(0xFF4CAF50),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-      Navigator.pop(context, true); // return true to trigger refresh
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to accept worker. Try again.'),
-          backgroundColor: const Color(0xFFE53935),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _acceptingId = null);
     }
   }
 
@@ -161,7 +86,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF6B00)))
+              child:
+                  CircularProgressIndicator(color: Color(0xFFFF6B00)))
           : _applicants.isEmpty
               ? _buildEmpty()
               : RefreshIndicator(
@@ -195,7 +121,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           const Text(
             'Workers nearby will apply shortly.\nPull down to refresh.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF888888), fontSize: 14),
+            style:
+                TextStyle(color: Color(0xFF888888), fontSize: 14),
           ),
         ],
       ),
@@ -203,48 +130,70 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   }
 
   Widget _buildApplicantCard(Map<String, dynamic> application) {
-    final worker = application['profiles'] as Map<String, dynamic>?;
+    final worker =
+        application['profiles'] as Map<String, dynamic>?;
     final name = worker?['name'] ?? 'Worker';
     final skill = worker?['skill'] ?? '';
     final rating = (worker?['rating'] ?? 0.0).toDouble();
     final avatarUrl = worker?['avatar_url'];
     final isOnline = worker?['is_online'] == true;
-    final workerId = worker?['id'];
+    final workerId = worker?['id'] ?? '';
     final status = application['status'] ?? 'pending';
-    final isAccepting = _acceptingId == application['id'];
+    final applicationId = application['id'] ?? '';
 
+    // ── Medal ──
+    final medal = rating > 0 ? getMedal(rating) : null;
+    final fee = medal != null
+        ? AcceptanceFeeService.getFeeForMedal(medal)
+        : 3.0;
+
+    // ── Status display ──
     Color statusColor = const Color(0xFFFF9800);
-    String statusLabel = 'Pending';
+    String statusLabel = '🕐 Pending';
     if (status == 'accepted') {
       statusColor = const Color(0xFF4CAF50);
-      statusLabel = 'Accepted ✓';
-    } else if (status == 'declined') {
+      statusLabel = '✅ Accepted';
+    } else if (status == 'declined' || status == 'rejected') {
       statusColor = const Color(0xFF555555);
-      statusLabel = 'Declined';
+      statusLabel = '❌ Declined';
+    } else if (status == 'fee_pending') {
+      statusColor = const Color(0xFFFF9800);
+      statusLabel = '⏳ Payment Pending';
     }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        // Subtle medal tint on card background
+        color: medal != null
+            ? Color.lerp(
+                const Color(0xFF1A1A1A),
+                medal.backgroundColor,
+                0.15,
+              )
+            : const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: status == 'accepted'
               ? const Color(0xFF4CAF50).withOpacity(0.4)
-              : const Color(0xFF2A2A2A),
+              : medal != null
+                  ? medal.accentColor.withOpacity(0.25)
+                  : const Color(0xFF2A2A2A),
         ),
       ),
       child: Column(
         children: [
-          // Worker info
+
+          // ── Worker info ──────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Avatar
+
+                // Avatar with medal overlay
                 GestureDetector(
                   onTap: () {
-                    if (workerId != null) {
+                    if (workerId.isNotEmpty) {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -255,22 +204,44 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     }
                   },
                   child: Stack(
+                    clipBehavior: Clip.none,
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor:
-                            const Color(0xFFFF6B00).withOpacity(0.15),
-                        backgroundImage: avatarUrl != null
-                            ? NetworkImage(avatarUrl)
-                            : null,
-                        child: avatarUrl == null
-                            ? Text(name[0].toUpperCase(),
-                                style: const TextStyle(
-                                    color: Color(0xFFFF6B00),
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: medal?.accentColor ??
+                                const Color(0xFFFF6B00)
+                                    .withOpacity(0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 26,
+                          backgroundColor: medal != null
+                              ? medal.accentColor.withOpacity(0.15)
+                              : const Color(0xFFFF6B00)
+                                  .withOpacity(0.15),
+                          backgroundImage: avatarUrl != null
+                              ? NetworkImage(avatarUrl)
+                              : null,
+                          child: avatarUrl == null
+                              ? Text(
+                                  name[0].toUpperCase(),
+                                  style: TextStyle(
+                                    color: medal?.accentColor ??
+                                        const Color(0xFFFF6B00),
                                     fontSize: 20,
-                                    fontWeight: FontWeight.w800))
-                            : null,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                )
+                              : null,
+                        ),
                       ),
+
+                      // Online dot
                       Positioned(
                         bottom: 0,
                         right: 0,
@@ -288,12 +259,32 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                           ),
                         ),
                       ),
+
+                      // Medal badge on avatar
+                      if (medal != null)
+                        Positioned(
+                          top: -4,
+                          left: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0D0D0D),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: medal.accentColor,
+                                  width: 1),
+                            ),
+                            child: Text(medal.emoji,
+                                style:
+                                    const TextStyle(fontSize: 11)),
+                          ),
+                        ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 14),
 
-                // Name + skill + rating
+                // Name + skill + rating + medal badge
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,23 +297,37 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                       const SizedBox(height: 2),
                       Text(skill,
                           style: const TextStyle(
-                              color: Color(0xFF888888), fontSize: 13)),
-                      const SizedBox(height: 4),
+                              color: Color(0xFF888888),
+                              fontSize: 13)),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
+                          // Stars with medal color
                           ...List.generate(
                             5,
-                            (i) => Icon(Icons.star_rounded,
-                                size: 14,
-                                color: i < rating.round()
-                                    ? const Color(0xFFFF6B00)
-                                    : const Color(0xFF333333)),
+                            (i) => Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: i < rating.round()
+                                  ? (medal?.starColor ??
+                                      const Color(0xFFFF6B00))
+                                  : const Color(0xFF333333),
+                            ),
                           ),
                           const SizedBox(width: 4),
-                          Text(rating.toStringAsFixed(1),
-                              style: const TextStyle(
-                                  color: Color(0xFF888888),
-                                  fontSize: 12)),
+                          Text(
+                            rating.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: medal?.accentColor ??
+                                  const Color(0xFF888888),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // Medal badge
+                          if (medal != null)
+                            _DarkMedalBadge(medal: medal),
                         ],
                       ),
                     ],
@@ -349,75 +354,87 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     const SizedBox(height: 4),
                     Text(_timeAgo(application['created_at']),
                         style: const TextStyle(
-                            color: Color(0xFF555555), fontSize: 11)),
+                            color: Color(0xFF555555),
+                            fontSize: 11)),
                   ],
                 ),
               ],
             ),
           ),
 
-          // Action buttons — only show if still pending
+          // ── Action buttons (pending only) ────────────────
           if (status == 'pending') ...[
-            Container(
-              height: 1,
-              color: const Color(0xFF2A2A2A),
-            ),
+            Container(height: 1, color: const Color(0xFF2A2A2A)),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Row(
                 children: [
+
                   // View profile
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        if (workerId != null) {
+                        if (workerId.isNotEmpty) {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  PublicProfileScreen(userId: workerId),
+                              builder: (_) => PublicProfileScreen(
+                                  userId: workerId),
                             ),
                           );
                         }
                       },
-                      icon: const Icon(Icons.person_outline, size: 16),
-                      label: const Text('View Profile'),
+                      icon: const Icon(Icons.person_outline,
+                          size: 16),
+                      label: const Text('Profile'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF888888),
-                        side: const BorderSide(color: Color(0xFF2A2A2A)),
+                        foregroundColor:
+                            const Color(0xFF888888),
+                        side: const BorderSide(
+                            color: Color(0xFF2A2A2A)),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
+                            borderRadius:
+                                BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // Accept
+
+                  // Accept — opens payment sheet
                   Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
-                      onPressed:
-                          isAccepting ? null : () => _acceptWorker(application),
-                      icon: isAccepting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.check_circle_outline,
-                              size: 16),
-                      label: Text(isAccepting ? 'Accepting...' : 'Accept Worker'),
+                      onPressed: () => AcceptWorkerSheet.show(
+                        context,
+                        applicationId: applicationId,
+                        jobId: widget.jobId,
+                        workerId: workerId,
+                        workerName: name,
+                        workerAvatarUrl: avatarUrl,
+                        workerRating: rating,
+                        onAccepted: _loadApplicants,
+                      ),
+                      icon: const Icon(
+                          Icons.check_circle_outline,
+                          size: 16),
+                      label: Text(
+                        'Accept · GHC ${fee.toStringAsFixed(0)}',
+                      ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
+                        backgroundColor: medal?.accentColor ??
+                            const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
+                            borderRadius:
+                                BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10),
                         elevation: 0,
                         textStyle: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13),
                       ),
                     ),
                   ),
@@ -425,6 +442,70 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
               ),
             ),
           ],
+
+          // ── Fee paid badge (accepted) ────────────────────
+          if (status == 'accepted') ...[
+            Container(height: 1, color: const Color(0xFF2A2A2A)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.payments_outlined,
+                      size: 14,
+                      color: medal?.accentColor ??
+                          const Color(0xFF4CAF50)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Platform fee of GHC ${fee.toStringAsFixed(0)} paid',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: medal?.accentColor ??
+                          const Color(0xFF4CAF50),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Dark-themed medal badge ───────────────────────────────────
+// Overrides the default light colors to match the dark UI
+class _DarkMedalBadge extends StatelessWidget {
+  final WorkerMedal medal;
+
+  const _DarkMedalBadge({required this.medal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: medal.accentColor.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+        border:
+            Border.all(color: medal.accentColor.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(medal.emoji,
+              style: const TextStyle(fontSize: 10)),
+          const SizedBox(width: 3),
+          Text(
+            medal.label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: medal.accentColor,
+            ),
+          ),
         ],
       ),
     );

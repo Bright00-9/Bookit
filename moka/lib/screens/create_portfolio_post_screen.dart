@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:moka/resume_picker_widget.dart';
 import '../services/portfolio_service.dart';
 import '../services/auth_service.dart';
+import 'package:moka/resume_model.dart';
+import 'package:moka/resume_picker_widget.dart';
 
 class CreatePortfolioPostScreen extends StatefulWidget {
   const CreatePortfolioPostScreen({super.key});
@@ -383,6 +386,17 @@ class _CreatePortfolioPostScreenState
                   .toList(),
               onChanged: (val) => setState(() => _selectedSkill = val),
             ),
+
+            const SizedBox(height: 8),
+
+            ResumePickerWidget(
+              onResumeReady: ResumeModel? resume) {
+                if (resume != null) {
+                  setState(() {
+                    "resume uploaded successfully"
+                  });
+                }
+              }
 
             const SizedBox(height: 32),
 

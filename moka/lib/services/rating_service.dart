@@ -1,4 +1,5 @@
 import 'supabase_service.dart';
+import 'worker_medal.dart';
 
 class RatingService {
   // Submit a rating
@@ -55,5 +56,24 @@ class RatingService {
         .eq('job_id', jobId)
         .maybeSingle();
     return data;
+  }
+
+  // Fetch average rating for a worker
+  Future<double?> fetchAverageRating(String workerId) async {
+    final data = await _supabase
+        .from('ratings')
+        .select('average_rating')
+        .eq('worker_id', workerId)
+        .maybeSingle();
+
+    if (data == null) return null;
+    return (data['average_rating'] as num).toDouble();
+  }
+
+  // Fetch medal for a worker
+  Future<WorkerMedal?> fetchMedal(String workerId) async {
+    final rating = await fetchAverageRating(workerId);
+    if (rating == null) return null;
+    return getMedal(rating);
   }
 }

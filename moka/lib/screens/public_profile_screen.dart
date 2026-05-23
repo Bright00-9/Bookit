@@ -1,10 +1,13 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/portfolio_service.dart';
+import '../services/resume_service.dart';
+import '../models/resume_model.dart';
+import '../models/worker_medal.dart';
+import '../widgets/resume_view_widget.dart';
 import 'worker_reviews_screen.dart';
 import 'post_detail_screen.dart';
 import 'chat_screen.dart';
-
 
 class PublicProfileScreen extends StatefulWidget {
   final String userId;
@@ -18,7 +21,9 @@ class PublicProfileScreen extends StatefulWidget {
 class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Map<String, dynamic>? _profile;
   List<Map<String, dynamic>> _posts = [];
+  ResumeModel? _resume;
   bool _isLoading = true;
+  bool _showResume = false;
 
   final _supabase = Supabase.instance.client;
 
@@ -34,7 +39,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       if (currentUserId == null) return;
       if (currentUserId == widget.userId) return;
 
-      // Show loading
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -44,7 +48,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         ),
       );
 
-      // Check existing conversation between these two users
       final existing = await _supabase
           .from('conversations')
           .select('id')
@@ -68,7 +71,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
         return;
       }
 
-      // Get my role
       final myProfile = await _supabase
           .from('profiles')
           .select('role')
@@ -78,8 +80,6 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       final myRole = myProfile['role'];
       final isCustomer = myRole == 'customer';
 
-      // Create conversation — job_id is null for direct messages
-      // Make sure you ran direct_message_update.sql in Supabase first!
       final conv = await _supabase
           .from('conversations')
           .insert({
@@ -122,14 +122,26 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
   Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
     try {
-      final profileData = await PortfolioService.getPublicProfile(widget.userId);
+      final profileData =
+          await PortfolioService.getPublicProfile(widget.userId);
       final posts = profileData['role'] == 'worker'
           ? await PortfolioService.getWorkerPosts(widget.userId)
           : [];
+
+      // Load resume for workers
+      ResumeModel? resume;
+      if (profileData['role'] == 'worker') {
+        try {
+          resume =
+              await ResumeService().fetchResumeByUserId(widget.userId);
+        } catch (_) {}
+      }
+
       if (mounted) {
         setState(() {
           _profile = profileData;
           _posts = List<Map<String, dynamic>>.from(posts);
+          _resume = resume;
         });
       }
     } catch (e) {
@@ -147,19 +159,28 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
       backgroundColor: const Color(0xFF0D0D0D),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF6B00)))
+              child:
+                  CircularProgressIndicator(color: Color(0xFFFF6B00)))
           : CustomScrollView(
               slivers: [
                 _buildSliverAppBar(),
-                SliverToBoxAdapter(child: _buildProfileInfo(isWorker)),
+                SliverToBoxAdapter(
+                    child: _buildProfileInfo(isWorker)),
                 if (isWorker) ...[
                   SliverToBoxAdapter(child: _buildStatsRow()),
-                  SliverToBoxAdapter(child: _buildPortfolioHeader()),
+                  // Medal section
+                  SliverToBoxAdapter(child: _buildMedalSection()),
+                  // Resume section
+                  SliverToBoxAdapter(child: _buildResumeSection()),
+                  SliverToBoxAdapter(
+                      child: _buildPortfolioHeader()),
                   _posts.isEmpty
-                      ? SliverToBoxAdapter(child: _buildEmptyPortfolio())
+                      ? SliverToBoxAdapter(
+                          child: _buildEmptyPortfolio())
                       : SliverGrid(
                           delegate: SliverChildBuilderDelegate(
-                            (context, i) => _buildPostThumbnail(_posts[i]),
+                            (context, i) =>
+                                _buildPostThumbnail(_posts[i]),
                             childCount: _posts.length,
                           ),
                           gridDelegate:
@@ -175,9 +196,14 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  // ─── Sliver App Bar ───────────────────────────────────────────
   Widget _buildSliverAppBar() {
     final name = _profile?['name'] ?? '';
     final avatarUrl = _profile?['avatar_url'];
+    final rating = (_profile?['rating'] ?? 0.0).toDouble();
+    final isWorker = _profile?['role'] == 'worker';
+    final medal =
+        isWorker && rating > 0 ? getMedal(rating) : null;
 
     return SliverAppBar(
       backgroundColor: const Color(0xFF0D0D0D),
@@ -201,22 +227,51 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              CircleAvatar(
-                radius: 42,
-                backgroundColor:
-                    const Color(0xFFFF6B00).withOpacity(0.15),
-                backgroundImage:
-                    avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                child: avatarUrl == null
-                    ? Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: Color(0xFFFF6B00),
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Avatar with medal ring color
+                  CircleAvatar(
+                    radius: 42,
+                    backgroundColor: medal != null
+                        ? medal.accentColor.withOpacity(0.2)
+                        : const Color(0xFFFF6B00).withOpacity(0.15),
+                    backgroundImage: avatarUrl != null
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl == null
+                        ? Text(
+                            name.isNotEmpty
+                                ? name[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              color: medal?.accentColor ??
+                                  const Color(0xFFFF6B00),
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          )
+                        : null,
+                  ),
+
+                  // Medal badge on avatar
+                  if (medal != null)
+                    Positioned(
+                      bottom: -4,
+                      right: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D0D0D),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: medal.accentColor, width: 1.5),
                         ),
-                      )
-                    : null,
+                        child: Text(medal.emoji,
+                            style: const TextStyle(fontSize: 14)),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -225,11 +280,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  // ─── Profile Info ─────────────────────────────────────────────
   Widget _buildProfileInfo(bool isWorker) {
     final name = _profile?['name'] ?? '';
     final skill = _profile?['skill'] ?? '';
     final rating = (_profile?['rating'] ?? 0.0).toDouble();
     final phone = _profile?['phone'] ?? '';
+    final medal = isWorker && rating > 0 ? getMedal(rating) : null;
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -267,11 +324,43 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF1A1A1A),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF2A2A2A)),
+                    border:
+                        Border.all(color: const Color(0xFF2A2A2A)),
                   ),
                   child: Text(skill,
                       style: const TextStyle(
                           color: Color(0xFF888888), fontSize: 12)),
+                ),
+              ],
+
+              // Medal badge next to role
+              if (medal != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: medal.backgroundColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: medal.accentColor.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(medal.emoji,
+                          style: const TextStyle(fontSize: 11)),
+                      const SizedBox(width: 4),
+                      Text(
+                        medal.label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: medal.accentColor,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],
@@ -297,7 +386,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     (i) => Icon(
                       Icons.star_rounded,
                       color: i < rating.round()
-                          ? const Color(0xFFFF6B00)
+                          ? (medal?.starColor ??
+                              const Color(0xFFFF6B00))
                           : const Color(0xFF333333),
                       size: 18,
                     ),
@@ -333,13 +423,13 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
             ),
           ],
           const SizedBox(height: 16),
-          // Chat button — visible to anyone viewing another user's profile
           if (_supabase.auth.currentUser?.id != widget.userId)
             SizedBox(
               width: 180,
               child: ElevatedButton.icon(
                 onPressed: _startChat,
-                icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                icon: const Icon(Icons.chat_bubble_outline,
+                    size: 16),
                 label: const Text('Send Message'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B00),
@@ -358,6 +448,214 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
     );
   }
 
+  // ─── Medal Section ────────────────────────────────────────────
+  Widget _buildMedalSection() {
+    final rating = (_profile?['rating'] ?? 0.0).toDouble();
+    if (rating <= 0) return const SizedBox.shrink();
+
+    final medal = getMedal(rating);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        // Subtle dark tint using medal background color
+        color: Color.lerp(
+            const Color(0xFF1A1A1A), medal.backgroundColor, 0.3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: medal.accentColor.withOpacity(0.3), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          // Large medal emoji
+          Text(medal.emoji, style: const TextStyle(fontSize: 36)),
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${medal.label} Worker',
+                  style: TextStyle(
+                    color: medal.accentColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _medalDescription(medal),
+                  style: const TextStyle(
+                      color: Color(0xFF888888),
+                      fontSize: 12,
+                      height: 1.4),
+                ),
+              ],
+            ),
+          ),
+
+          // Rating pill
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: medal.accentColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: medal.accentColor.withOpacity(0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.star_rounded,
+                    color: medal.starColor, size: 14),
+                const SizedBox(width: 3),
+                Text(
+                  rating.toStringAsFixed(1),
+                  style: TextStyle(
+                    color: medal.accentColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _medalDescription(WorkerMedal medal) {
+    switch (medal) {
+      case WorkerMedal.gold:
+        return 'Top-rated worker with consistently excellent service and outstanding customer satisfaction.';
+      case WorkerMedal.silver:
+        return 'Reliable worker with a good track record and positive customer feedback.';
+      case WorkerMedal.bronze:
+        return 'Worker is building their reputation. Check reviews before hiring.';
+    }
+  }
+
+  // ─── Resume Section ───────────────────────────────────────────
+  Widget _buildResumeSection() {
+    // Don't show if no resume and viewing own profile
+    if (_resume == null &&
+        _supabase.auth.currentUser?.id == widget.userId) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row with toggle
+          GestureDetector(
+            onTap: () =>
+                setState(() => _showResume = !_showResume),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Resume',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700)),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _resume != null
+                            ? const Color(0xFF4CAF50).withOpacity(0.15)
+                            : const Color(0xFF888888).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _resume != null ? '✅ Available' : 'Not added',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _resume != null
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFF888888),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      _showResume
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: const Color(0xFF888888),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Resume content — collapsible
+          if (_showResume) ...[
+            const SizedBox(height: 12),
+            if (_resume == null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: const Color(0xFF2A2A2A)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline,
+                        color: Color(0xFF888888), size: 16),
+                    SizedBox(width: 8),
+                    Text('No resume added yet.',
+                        style: TextStyle(
+                            color: Color(0xFF888888),
+                            fontSize: 13)),
+                  ],
+                ),
+              )
+            else
+              // Dark-themed wrapper for ResumeViewWidget
+              Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: Theme.of(context).colorScheme.copyWith(
+                        primary: const Color(0xFFFF6B00),
+                      ),
+                  cardColor: const Color(0xFF1A1A1A),
+                  textTheme: Theme.of(context).textTheme.apply(
+                        bodyColor: Colors.white,
+                        displayColor: Colors.white,
+                      ),
+                  chipTheme: ChipThemeData(
+                    backgroundColor: const Color(0xFF2A2A2A),
+                    labelStyle:
+                        const TextStyle(color: Colors.white),
+                    side: const BorderSide(
+                        color: Color(0xFF3A3A3A)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  iconTheme: const IconThemeData(
+                      color: Color(0xFF888888)),
+                  dividerColor: const Color(0xFF2A2A2A),
+                ),
+                child: ResumeViewWidget(userId: widget.userId),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Stats Row ────────────────────────────────────────────────
   Widget _buildStatsRow() {
     final jobsDone = _profile?['job_applications_count'] ?? 0;
     final postsCount = _posts.length;
@@ -450,7 +748,8 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                   fontWeight: FontWeight.w600)),
           SizedBox(height: 6),
           Text('This worker hasn\'t shared any work yet',
-              style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+              style: TextStyle(
+                  color: Color(0xFF888888), fontSize: 13)),
         ],
       ),
     );

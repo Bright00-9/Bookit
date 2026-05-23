@@ -31,6 +31,7 @@ class SettingsService {
     await _supabase.from('resumes').delete().eq('user_id', _userId);
     // Call your NestJS endpoint to delete the auth.users record
     // await _supabase.functions.invoke('delete-user');
+    await NotificationService.clearToken(); 
     await _supabase.auth.signOut();
   }
 
