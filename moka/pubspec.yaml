@@ -47,6 +47,12 @@ dependencies:
   open_filex: ^4.3.4
   permission_handler: ^11.3.0
   timeago: ^3.6.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  video_player: ^2.8.3
+  ffmpeg_kit_flutter: ^6.0.3  
+  webview_flutter: ^4.10.0
+
 
 
 

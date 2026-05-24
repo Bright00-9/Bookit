@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'resume_model.dart';
-import '/services/resume_service.dart';
-import '/services/resume_download_service.dart';
+import '../models/resume_model.dart';
+import '../services/resume_service.dart';
+import '../services/resume_download_service.dart';
 
 class ResumePickerWidget extends StatefulWidget {
   final Function(ResumeModel?) onResumeReady;

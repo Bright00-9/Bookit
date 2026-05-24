@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '/settings_model.dart';
+import '../models/settings_model.dart';
+import 'notification_service.dart';
 
 class SettingsService {
   final _supabase = Supabase.instance.client;
@@ -31,7 +32,7 @@ class SettingsService {
     await _supabase.from('resumes').delete().eq('user_id', _userId);
     // Call your NestJS endpoint to delete the auth.users record
     // await _supabase.functions.invoke('delete-user');
-    await NotificationService.clearToken(); 
+    await NotificationService.clearTokenOnLogout(); 
     await _supabase.auth.signOut();
   }
 

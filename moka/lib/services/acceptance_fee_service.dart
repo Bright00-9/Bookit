@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'worker_medal.dart';
+import '../models/worker_medal.dart';
 
 class AcceptanceFeeService {
   final _supabase = Supabase.instance.client;

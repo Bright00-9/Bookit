@@ -30,15 +30,6 @@ void main() async {
   runApp(const MokaApp());
 }
 
-@override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    await NotificationService.initialize(context);
-    await AppTipDialog.showIfEnabled(context);
-  });
-}
-
 class MokaApp extends StatelessWidget {
   const MokaApp({super.key});
 

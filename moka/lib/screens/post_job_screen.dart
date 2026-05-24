@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/job_service.dart';
 import '../services/job_post_service.dart';
+import '../services/identity_guard.dart';
 
 class PostJobScreen extends StatefulWidget {
   const PostJobScreen({super.key});
@@ -88,7 +89,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      final address = await JobPostService.reverseGeocode(
+      final address = await JobPostService().reverseGeocode(
         position.latitude,
         position.longitude,
       );
@@ -148,6 +149,11 @@ class _PostJobScreenState extends State<PostJobScreen> {
 
   // ─── Post job ─────────────────────────────────────────────
   Future<void> _handlePost() async {
+      final ok = await IdentityGuard.check(
+        context,
+        action: 'post a job',
+      );
+      if (!ok) return;
     if (_titleController.text.isEmpty ||
         _selectedSkill == null) {
       _showError('Please fill in the title and skill');
@@ -280,7 +286,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
                             _lng = latLng.longitude;
                           });
                           final address =
-                              await JobPostService
+                              await JobPostService()
                                   .reverseGeocode(
                             latLng.latitude,
                             latLng.longitude,

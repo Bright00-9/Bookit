@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '/resume_model.dart';
+import '../models/resume_model.dart';
 import 'dart:typed_data';
 
 class ResumeService {

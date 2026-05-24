@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:moka/resume_picker_widget.dart';
 import '../services/portfolio_service.dart';
 import '../services/auth_service.dart';
-import 'package:moka/resume_model.dart';
-import 'package:moka/resume_picker_widget.dart';
+import '../widgets/resume_picker_widget.dart';
+import '../models/resume_model.dart'; 
+
 
 class CreatePortfolioPostScreen extends StatefulWidget {
   const CreatePortfolioPostScreen({super.key});
@@ -21,6 +21,7 @@ class _CreatePortfolioPostScreenState
   final _captionController = TextEditingController();
   String? _selectedSkill;
   bool _isPosting = false;
+  ResumeModel? _resume;
 
   final List<String> _skills = [
     'Plumber', 'Electrician', 'Cleaner', 'Carpenter',
@@ -390,13 +391,16 @@ class _CreatePortfolioPostScreenState
             const SizedBox(height: 8),
 
             ResumePickerWidget(
-              onResumeReady: ResumeModel? resume) {
-                if (resume != null) {
-                  setState(() {
-                    "resume uploaded successfully"
-                  });
+              onResumeReady: (ResumeModel? resume) {
+                setState(() {
+                  _resume = resume; // Will update to the new resume OR clear it if null
+                });
+                
+                if (resume == null) {
+                  // Optional: Show a snackbar or message saying "No file selected"
                 }
-              }
+              },
+            ),
 
             const SizedBox(height: 32),
 

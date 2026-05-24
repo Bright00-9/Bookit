@@ -1,6 +1,9 @@
 import 'supabase_service.dart';
-import 'worker_medal.dart';
+import '../models/worker_medal.dart';
+import 'notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+final supabase = Supabase.instance.client;
 class RatingService {
   // Submit a rating
   static Future<void> submitRating({
@@ -60,7 +63,7 @@ class RatingService {
 
   // Fetch average rating for a worker
   Future<double?> fetchAverageRating(String workerId) async {
-    final data = await _supabase
+    final data = await supabase
         .from('ratings')
         .select('average_rating')
         .eq('worker_id', workerId)

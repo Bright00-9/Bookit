@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'worker_profile_card.dart';
-import 'worker_medal.dart';
+import '../widgets/worker_profile_card.dart';
+import '../models/worker_medal.dart';
 
 class WorkerListScreen extends StatefulWidget {
   const WorkerListScreen({super.key});

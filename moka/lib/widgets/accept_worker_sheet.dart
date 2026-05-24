@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'worker_medal.dart';
+import '../models/worker_medal.dart';
 import 'worker_medal_badge.dart';
-import 'acceptance_fee_service.dart';
-import 'paystack_service.dart';
+import '../services/acceptance_fee_service.dart';
+import '../services/paystack_service.dart';
 
 class AcceptWorkerSheet extends StatefulWidget {
   final String applicationId;

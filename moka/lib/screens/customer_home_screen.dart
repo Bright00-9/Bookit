@@ -12,9 +12,10 @@ import 'my_jobs_screen.dart';
 import 'post_detail_screen.dart';
 import 'public_profile_screen.dart';
 import 'settings_screen.dart';
-import '../app_tip_dialog.dart';
+import '../widgets/app_tip_dialog.dart';
 import 'worker_list_screen.dart';
 import 'leaderboard_screen.dart';
+import '../services/notification_service.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'worker_medal.dart';
+import '../models/worker_medal.dart';
 
 class WorkerMedalBadge extends StatelessWidget {
   final WorkerMedal medal;

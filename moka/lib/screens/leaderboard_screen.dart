@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'leaderboard_service.dart';
-import 'worker_medal.dart';
-import 'worker_medal_badge.dart';
+import '../services/leaderboard_service.dart';
+import '../models/worker_medal.dart';
+import '../widgets/worker_medal_badge.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});

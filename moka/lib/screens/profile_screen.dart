@@ -11,6 +11,7 @@ import '../models/worker_medal.dart';
 import 'worker_reviews_screen.dart';
 import 'public_profile_screen.dart';
 import 'settings_screen.dart';
+import '../services/notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});

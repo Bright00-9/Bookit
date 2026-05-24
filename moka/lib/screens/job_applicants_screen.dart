@@ -1,10 +1,11 @@
  import 'package:flutter/material.dart';
 import '../services/job_service.dart';
-import '../services/acceptance_fee_service.dart';
+import '../services/payment_service.dart';
 import '../models/worker_medal.dart';
-import '../widgets/worker_medal_badge.dart';
+import '../services/identity_verification_service.dart';
 import '../widgets/accept_worker_sheet.dart';
 import 'public_profile_screen.dart';
+import 'identity_verification_screen.dart';
 
 class JobApplicantsScreen extends StatefulWidget {
   final String jobId;
@@ -17,23 +18,45 @@ class JobApplicantsScreen extends StatefulWidget {
   });
 
   @override
-  State<JobApplicantsScreen> createState() => _JobApplicantsScreenState();
+  State<JobApplicantsScreen> createState() =>
+      _JobApplicantsScreenState();
 }
 
-class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
+class _JobApplicantsScreenState
+    extends State<JobApplicantsScreen> {
   List<Map<String, dynamic>> _applicants = [];
   bool _isLoading = true;
+
+  // Cache customer's own verification status
+  // so we don't fetch on every card tap
+  bool? _customerVerified;
 
   @override
   void initState() {
     super.initState();
     _loadApplicants();
+    _checkCustomerVerification();
+  }
+
+  // ── Check if the customer viewing this screen
+  // is identity verified ─────────────────────────────────
+  Future<void> _checkCustomerVerification() async {
+    try {
+      final service = IdentityVerificationService();
+      final verified = await service.canPerformActions();
+      if (mounted) {
+        setState(() => _customerVerified = verified);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _customerVerified = true);
+    }
   }
 
   Future<void> _loadApplicants() async {
     setState(() => _isLoading = true);
     try {
-      final data = await JobService.getJobApplicants(widget.jobId);
+      final data =
+          await JobService.getJobApplicants(widget.jobId);
       if (mounted) setState(() => _applicants = data);
     } catch (e) {
       debugPrint('Error: $e');
@@ -42,11 +65,125 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     }
   }
 
+  // ── Handle accept — checks customer verification
+  // before opening payment sheet ─────────────────────────
+  Future<void> _handleAccept({
+    required String applicationId,
+    required String workerId,
+    required String workerName,
+    required String? workerAvatarUrl,
+    required double rating,
+  }) async {
+    // If verification status not yet loaded, wait
+    if (_customerVerified == null) {
+      await _checkCustomerVerification();
+    }
+
+    if (_customerVerified == false) {
+      // Show verification required dialog
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF6B00)
+                      .withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                    Icons.shield_outlined,
+                    color: Color(0xFFFF6B00),
+                    size: 32),
+              ),
+              const SizedBox(height: 16),
+              const Text('Verification Required',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              const Text(
+                'You need to verify your identity before accepting workers. It only takes a few minutes.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Color(0xFF888888),
+                    fontSize: 13,
+                    height: 1.5),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const IdentityVerificationScreen(
+                                isBlocking: true),
+                      ),
+                    ).then((_) =>
+                        _checkCustomerVerification());
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        const Color(0xFFFF6B00),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: const Text('Verify Now',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Maybe Later',
+                    style: TextStyle(
+                        color: Color(0xFF888888),
+                        fontSize: 13)),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Customer is verified — open payment sheet
+    if (!mounted) return;
+    AcceptWorkerSheet.show(
+      context,
+      applicationId: applicationId,
+      jobId: widget.jobId,
+      workerId: workerId,
+      workerName: workerName,
+      workerAvatarUrl: workerAvatarUrl,
+      workerRating: rating,
+      onAccepted: _loadApplicants,
+    );
+  }
+
   String _timeAgo(String? ts) {
     if (ts == null) return '';
-    final diff = DateTime.now().difference(DateTime.parse(ts));
+    final diff =
+        DateTime.now().difference(DateTime.parse(ts));
     if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inMinutes < 60)
+      return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
   }
@@ -73,32 +210,78 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     fontSize: 18)),
             Text(widget.jobTitle,
                 style: const TextStyle(
-                    color: Color(0xFF888888), fontSize: 12),
+                    color: Color(0xFF888888),
+                    fontSize: 12),
                 overflow: TextOverflow.ellipsis),
           ],
         ),
         actions: [
+          // Show verification status in app bar
+          if (_customerVerified == false)
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const IdentityVerificationScreen(
+                          isBlocking: true),
+                ),
+              ).then(
+                  (_) => _checkCustomerVerification()),
+              child: Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF9800)
+                      .withOpacity(0.15),
+                  borderRadius:
+                      BorderRadius.circular(8),
+                  border: Border.all(
+                      color: const Color(0xFFFF9800)
+                          .withOpacity(0.5)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shield_outlined,
+                        color: Color(0xFFFF9800),
+                        size: 14),
+                    SizedBox(width: 4),
+                    Text('Verify',
+                        style: TextStyle(
+                            color: Color(0xFFFF9800),
+                            fontSize: 12,
+                            fontWeight:
+                                FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
           IconButton(
             onPressed: _loadApplicants,
-            icon: const Icon(Icons.refresh, color: Color(0xFF888888)),
+            icon: const Icon(Icons.refresh,
+                color: Color(0xFF888888)),
           ),
         ],
       ),
       body: _isLoading
           ? const Center(
-              child:
-                  CircularProgressIndicator(color: Color(0xFFFF6B00)))
+              child: CircularProgressIndicator(
+                  color: Color(0xFFFF6B00)))
           : _applicants.isEmpty
               ? _buildEmpty()
               : RefreshIndicator(
                   color: const Color(0xFFFF6B00),
-                  backgroundColor: const Color(0xFF1A1A1A),
+                  backgroundColor:
+                      const Color(0xFF1A1A1A),
                   onRefresh: _loadApplicants,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(20),
                     itemCount: _applicants.length,
                     itemBuilder: (context, i) =>
-                        _buildApplicantCard(_applicants[i]),
+                        _buildApplicantCard(
+                            _applicants[i]),
                   ),
                 ),
     );
@@ -121,15 +304,16 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           const Text(
             'Workers nearby will apply shortly.\nPull down to refresh.',
             textAlign: TextAlign.center,
-            style:
-                TextStyle(color: Color(0xFF888888), fontSize: 14),
+            style: TextStyle(
+                color: Color(0xFF888888), fontSize: 14),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildApplicantCard(Map<String, dynamic> application) {
+  Widget _buildApplicantCard(
+      Map<String, dynamic> application) {
     final worker =
         application['profiles'] as Map<String, dynamic>?;
     final name = worker?['name'] ?? 'Worker';
@@ -141,10 +325,17 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     final status = application['status'] ?? 'pending';
     final applicationId = application['id'] ?? '';
 
+    // Worker identity verification status
+    final workerIdentityStatus =
+        worker?['identity_status'] ?? 'unverified';
+    final workerIsVerified =
+        workerIdentityStatus == 'verified' ||
+            workerIdentityStatus == 'auto_passed';
+
     // ── Medal ──
     final medal = rating > 0 ? getMedal(rating) : null;
     final fee = medal != null
-        ? AcceptanceFeeService.getFeeForMedal(medal)
+        ? PaymentService.getAcceptanceFee(medal.name)
         : 3.0;
 
     // ── Status display ──
@@ -153,7 +344,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     if (status == 'accepted') {
       statusColor = const Color(0xFF4CAF50);
       statusLabel = '✅ Accepted';
-    } else if (status == 'declined' || status == 'rejected') {
+    } else if (status == 'declined' ||
+        status == 'rejected') {
       statusColor = const Color(0xFF555555);
       statusLabel = '❌ Declined';
     } else if (status == 'fee_pending') {
@@ -164,7 +356,6 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        // Subtle medal tint on card background
         color: medal != null
             ? Color.lerp(
                 const Color(0xFF1A1A1A),
@@ -184,13 +375,13 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       child: Column(
         children: [
 
-          // ── Worker info ──────────────────────────────────
+          // ── Worker info ──────────────────────────
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
 
-                // Avatar with medal overlay
+                // Avatar with medal + verification overlay
                 GestureDetector(
                   onTap: () {
                     if (workerId.isNotEmpty) {
@@ -198,7 +389,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) =>
-                              PublicProfileScreen(userId: workerId),
+                              PublicProfileScreen(
+                                  userId: workerId),
                         ),
                       );
                     }
@@ -221,20 +413,25 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         child: CircleAvatar(
                           radius: 26,
                           backgroundColor: medal != null
-                              ? medal.accentColor.withOpacity(0.15)
+                              ? medal.accentColor
+                                  .withOpacity(0.15)
                               : const Color(0xFFFF6B00)
                                   .withOpacity(0.15),
-                          backgroundImage: avatarUrl != null
+                          backgroundImage: avatarUrl !=
+                                  null
                               ? NetworkImage(avatarUrl)
                               : null,
                           child: avatarUrl == null
                               ? Text(
                                   name[0].toUpperCase(),
                                   style: TextStyle(
-                                    color: medal?.accentColor ??
-                                        const Color(0xFFFF6B00),
+                                    color: medal
+                                            ?.accentColor ??
+                                        const Color(
+                                            0xFFFF6B00),
                                     fontSize: 20,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight:
+                                        FontWeight.w800,
                                   ),
                                 )
                               : null,
@@ -254,7 +451,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                                 : const Color(0xFF555555),
                             shape: BoxShape.circle,
                             border: Border.all(
-                                color: const Color(0xFF1A1A1A),
+                                color: const Color(
+                                    0xFF1A1A1A),
                                 width: 2),
                           ),
                         ),
@@ -266,17 +464,20 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                           top: -4,
                           left: -4,
                           child: Container(
-                            padding: const EdgeInsets.all(2),
+                            padding:
+                                const EdgeInsets.all(2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0D0D0D),
+                              color: const Color(
+                                  0xFF0D0D0D),
                               shape: BoxShape.circle,
                               border: Border.all(
-                                  color: medal.accentColor,
+                                  color:
+                                      medal.accentColor,
                                   width: 1),
                             ),
                             child: Text(medal.emoji,
-                                style:
-                                    const TextStyle(fontSize: 11)),
+                                style: const TextStyle(
+                                    fontSize: 11)),
                           ),
                         ),
                     ],
@@ -284,25 +485,52 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                 ),
                 const SizedBox(width: 14),
 
-                // Name + skill + rating + medal badge
+                // Name + skill + rating + badges
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
-                      Text(name,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16)),
+                      // Name + verified badge
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(name,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight:
+                                        FontWeight.w700,
+                                    fontSize: 15),
+                                overflow:
+                                    TextOverflow.ellipsis),
+                          ),
+                          const SizedBox(width: 4),
+                          // Identity verified badge
+                          if (workerIsVerified)
+                            const Icon(Icons.verified,
+                                color: Color(0xFF2196F3),
+                                size: 15)
+                          else
+                            Tooltip(
+                              message:
+                                  'Worker not yet verified',
+                              child: const Icon(
+                                  Icons.shield_outlined,
+                                  color: Color(0xFF555555),
+                                  size: 15),
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text(skill,
                           style: const TextStyle(
                               color: Color(0xFF888888),
                               fontSize: 13)),
                       const SizedBox(height: 6),
+
+                      // Stars + rating + medal badge
                       Row(
                         children: [
-                          // Stars with medal color
                           ...List.generate(
                             5,
                             (i) => Icon(
@@ -310,8 +538,10 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                               size: 14,
                               color: i < rating.round()
                                   ? (medal?.starColor ??
-                                      const Color(0xFFFF6B00))
-                                  : const Color(0xFF333333),
+                                      const Color(
+                                          0xFFFF6B00))
+                                  : const Color(
+                                      0xFF333333),
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -325,25 +555,65 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          // Medal badge
                           if (medal != null)
                             _DarkMedalBadge(medal: medal),
                         ],
                       ),
+
+                      // Unverified worker warning
+                      if (!workerIsVerified) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding:
+                              const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF9800)
+                                .withOpacity(0.1),
+                            borderRadius:
+                                BorderRadius.circular(6),
+                            border: Border.all(
+                                color: const Color(
+                                        0xFFFF9800)
+                                    .withOpacity(0.3)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                  Icons.warning_amber_outlined,
+                                  color: Color(0xFFFF9800),
+                                  size: 11),
+                              SizedBox(width: 3),
+                              Text('Not verified',
+                                  style: TextStyle(
+                                      color:
+                                          Color(0xFFFF9800),
+                                      fontSize: 10,
+                                      fontWeight:
+                                          FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
 
-                // Status + time
+                // Status chip + time
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.end,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
+                        color:
+                            statusColor.withOpacity(0.15),
+                        borderRadius:
+                            BorderRadius.circular(8),
                       ),
                       child: Text(statusLabel,
                           style: TextStyle(
@@ -352,7 +622,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                               fontWeight: FontWeight.w700)),
                     ),
                     const SizedBox(height: 4),
-                    Text(_timeAgo(application['created_at']),
+                    Text(
+                        _timeAgo(
+                            application['created_at']),
                         style: const TextStyle(
                             color: Color(0xFF555555),
                             fontSize: 11)),
@@ -362,11 +634,14 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             ),
           ),
 
-          // ── Action buttons (pending only) ────────────────
+          // ── Action buttons (pending only) ────────
           if (status == 'pending') ...[
-            Container(height: 1, color: const Color(0xFF2A2A2A)),
+            Container(
+                height: 1,
+                color: const Color(0xFF2A2A2A)),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              padding: const EdgeInsets.fromLTRB(
+                  16, 12, 16, 16),
               child: Row(
                 children: [
 
@@ -378,13 +653,15 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PublicProfileScreen(
-                                  userId: workerId),
+                              builder: (_) =>
+                                  PublicProfileScreen(
+                                      userId: workerId),
                             ),
                           );
                         }
                       },
-                      icon: const Icon(Icons.person_outline,
+                      icon: const Icon(
+                          Icons.person_outline,
                           size: 16),
                       label: const Text('Profile'),
                       style: OutlinedButton.styleFrom(
@@ -394,27 +671,26 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                             color: Color(0xFF2A2A2A)),
                         shape: RoundedRectangleBorder(
                             borderRadius:
-                                BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10),
+                                BorderRadius.circular(
+                                    10)),
+                        padding:
+                            const EdgeInsets.symmetric(
+                                vertical: 10),
                       ),
                     ),
                   ),
                   const SizedBox(width: 10),
 
-                  // Accept — opens payment sheet
+                  // Accept button
                   Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
-                      onPressed: () => AcceptWorkerSheet.show(
-                        context,
+                      onPressed: () => _handleAccept(
                         applicationId: applicationId,
-                        jobId: widget.jobId,
                         workerId: workerId,
                         workerName: name,
                         workerAvatarUrl: avatarUrl,
-                        workerRating: rating,
-                        onAccepted: _loadApplicants,
+                        rating: rating,
                       ),
                       icon: const Icon(
                           Icons.check_circle_outline,
@@ -423,14 +699,17 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         'Accept · GHC ${fee.toStringAsFixed(0)}',
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: medal?.accentColor ??
-                            const Color(0xFF4CAF50),
+                        backgroundColor:
+                            medal?.accentColor ??
+                                const Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius:
-                                BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10),
+                                BorderRadius.circular(
+                                    10)),
+                        padding:
+                            const EdgeInsets.symmetric(
+                                vertical: 10),
                         elevation: 0,
                         textStyle: const TextStyle(
                             fontWeight: FontWeight.w700,
@@ -443,13 +722,17 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             ),
           ],
 
-          // ── Fee paid badge (accepted) ────────────────────
+          // ── Fee paid row (accepted) ───────────────
           if (status == 'accepted') ...[
-            Container(height: 1, color: const Color(0xFF2A2A2A)),
+            Container(
+                height: 1,
+                color: const Color(0xFF2A2A2A)),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+              padding: const EdgeInsets.fromLTRB(
+                  16, 10, 16, 14),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment:
+                    MainAxisAlignment.center,
                 children: [
                   Icon(Icons.payments_outlined,
                       size: 14,
@@ -475,7 +758,6 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 }
 
 // ── Dark-themed medal badge ───────────────────────────────────
-// Overrides the default light colors to match the dark UI
 class _DarkMedalBadge extends StatelessWidget {
   final WorkerMedal medal;
 
@@ -489,8 +771,8 @@ class _DarkMedalBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: medal.accentColor.withOpacity(0.15),
         borderRadius: BorderRadius.circular(6),
-        border:
-            Border.all(color: medal.accentColor.withOpacity(0.4)),
+        border: Border.all(
+            color: medal.accentColor.withOpacity(0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

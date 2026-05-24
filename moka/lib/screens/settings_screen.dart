@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '/settings_model.dart';
-import '/services/settings_service.dart';
-import '/services/tips_service.dart';
-import '/app_tip_dialog.dart';
+import '../models/settings_model.dart';
+import '../services/settings_service.dart';
+import '../services/tips_service.dart';
+import '../widgets/app_tip_dialog.dart';
+import '../services/auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -122,36 +123,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       return;
     }
-    try {
-      await AuthService.changePassword(_newPasswordCtrl.text);
-      _newPasswordCtrl.clear();
-      _confirmPasswordCtrl.clear();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Password changed!')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
-        );
+    void someMethod() async{
+      try {
+        await AuthService.changePassword(_newPasswordCtrl.text);
+        _newPasswordCtrl.clear();
+        _confirmPasswordCtrl.clear();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Password changed!')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed: $e')),
+          );
+        }
       }
     }
   }
 
   // Replace _confirmDeleteAccount() delete logic with:
-  try {
-    await AuthService.deleteAccount();
-    if (mounted) {
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil('/login', (_) => false);
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete account: $e')),
-      );
+  void someMethod() async{
+    try {
+      await AuthService.deleteAccount();
+      if (mounted) {
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/login', (_) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete account: $e')),
+        );
+      }
     }
   }
 
