@@ -18,6 +18,7 @@ class TipsService {
     }
   }
 
+
   Future<void> setTipsEnabled(bool enabled) async {
     await _supabase.from('user_settings').upsert({
       'user_id': _userId,
