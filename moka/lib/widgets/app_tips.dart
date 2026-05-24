@@ -16,7 +16,7 @@ class AppTip {
 
 const List<AppTip> appTips = [
 
-  // ── CUSTOMER TIPS ──
+  // ── CUSTOMER TIPS ──----
   AppTip(
     emoji: '📍',
     title: 'Set Your Job Radius',
