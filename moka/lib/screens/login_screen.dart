@@ -249,21 +249,30 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.user != null) {
-        // Fetch role and navigate
+        // ── Create settings if first login ──
+        await AuthService.initSettingsAfterLogin();
+        // ── Sync role ──
+        await AuthService.syncRoleToSettings();
+
+        // Navigate based on role
         final role = await AuthService.getCurrentRole();
         if (!mounted) return;
-
         if (role == 'worker') {
-          Navigator.pushReplacementNamed(context, '/worker-home');
+          Navigator.pushReplacementNamed(
+              context, '/worker-home');
         } else {
-          Navigator.pushReplacementNamed(context, '/customer-home');
+          Navigator.pushReplacementNamed(
+              context, '/customer-home');
         }
       }
-    } catch (e) {
-      _showError('Invalid email or password. Please try again.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+      } catch (e) {
+        _showError(
+            e.toString().replaceAll('Exception: ', ''));
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      } 
   }
 
   void _showError(String message) {

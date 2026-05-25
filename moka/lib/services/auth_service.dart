@@ -1,9 +1,9 @@
+ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
-import 'package:flutter/foundation.dart';
 
 class AuthService {
-  // ── Sign up ───────────────────────────────────────────────
+  // ── Sign up ───────────────────────────────────────────
   static Future<AuthResponse> signUp({
     required String email,
     required String password,
@@ -19,12 +19,16 @@ class AuthService {
         'name': name,
         'phone': phone,
         'role': role,
-        'skill': skill,
+        if (skill != null) 'skill': skill,
       },
     );
 
-    // Create default user_settings row on signup
-    if (response.user != null) {
+    // Only create settings if session exists
+    // (no email confirmation required)
+    // If confirmation required, profile may not
+    // exist yet so skip silently
+    if (response.user != null &&
+        response.session != null) {
       try {
         await supabase.from('user_settings').upsert({
           'user_id': response.user!.id,
@@ -37,7 +41,6 @@ class AuthService {
           'show_tips': true,
         });
       } catch (e) {
-        // Non-critical — settings will be created on first load
         debugPrint('Settings init error: $e');
       }
     }
@@ -45,7 +48,7 @@ class AuthService {
     return response;
   }
 
-  // ── Login ─────────────────────────────────────────────────
+  // ── Login ─────────────────────────────────────────────
   static Future<AuthResponse> login({
     required String email,
     required String password,
@@ -56,67 +59,88 @@ class AuthService {
     );
   }
 
-  // ── Logout ────────────────────────────────────────────────
-  // Clears FCM token before signing out so worker
-  // stops receiving notifications after logout
+  // ── Logout ────────────────────────────────────────────
+  // Clears FCM token before signing out
   static Future<void> logout() async {
     try {
-      // Clear FCM token from database before signing out
       await updateFcmToken(null);
-    } catch (_) {
-      // Non-critical — proceed with logout regardless
-    }
+    } catch (_) {}
     await supabase.auth.signOut();
   }
 
-  // ── Get current user profile ──────────────────────────────
+  // ── Get current user profile ──────────────────────────
+  // Uses maybeSingle so it returns null instead
+  // of throwing when no row found
   static Future<Map<String, dynamic>?> getCurrentProfile() async {
     final user = supabase.auth.currentUser;
     if (user == null) return null;
 
-    final response = await supabase
-        .from('profiles')
-        .select()
-        .eq('id', user.id)
-        .single();
-
-    return response;
+    try {
+      final response = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+      return response;
+    } catch (e) {
+      debugPrint('Error loading profile: $e');
+      return null;
+    }
   }
 
-  // ── Get current user role ─────────────────────────────────
+  // ── Get current user role ─────────────────────────────
   static Future<String?> getCurrentRole() async {
     final profile = await getCurrentProfile();
     return profile?['role'];
   }
 
-  // ── Update FCM token ──────────────────────────────────────
+  // ── Update FCM token ──────────────────────────────────
   // Accepts null to clear token on logout
-  static Future<void> updateFcmToken(String? token) async {
+  static Future<void> updateFcmToken(
+      String? token) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
-    await supabase
-        .from('profiles')
-        .update({'fcm_token': token}).eq('id', user.id);
+    try {
+      await supabase
+          .from('profiles')
+          .update({'fcm_token': token})
+          .eq('id', user.id);
+    } catch (e) {
+      debugPrint('FCM token update error: $e');
+    }
   }
 
-  // ── Get current user email ────────────────────────────────
+  // ── Get current user email ────────────────────────────
   static String? get currentEmail =>
       supabase.auth.currentUser?.email;
 
-  // ── Update profile name and phone ─────────────────────────
+  // ── Get current user id ───────────────────────────────
+  static String? get currentUserId =>
+      supabase.auth.currentUser?.id;
+
+  // ── Check if user is logged in ────────────────────────
+  static bool get isLoggedIn =>
+      supabase.auth.currentUser != null;
+
+  // ── Update profile name and phone ─────────────────────
   static Future<void> updateProfile({
     required String name,
     required String phone,
   }) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
-    await supabase.from('profiles').update({
-      'name': name,
-      'phone': phone,
-    }).eq('id', user.id);
+    try {
+      await supabase.from('profiles').update({
+        'name': name,
+        'phone': phone,
+      }).eq('id', user.id);
+    } catch (e) {
+      debugPrint('Update profile error: $e');
+      rethrow;
+    }
   }
 
-  // ── Update worker online status and location ──────────────
+  // ── Update worker online status and location ──────────
   static Future<void> updateWorkerStatus({
     required bool isOnline,
     double? lat,
@@ -124,32 +148,24 @@ class AuthService {
   }) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
-    await supabase.from('profiles').update({
-      'is_online': isOnline,
-      if (lat != null) 'lat': lat,
-      if (lng != null) 'lng': lng,
-    }).eq('id', user.id);
+    try {
+      await supabase.from('profiles').update({
+        'is_online': isOnline,
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
+      }).eq('id', user.id);
+    } catch (e) {
+      debugPrint('Worker status update error: $e');
+    }
   }
 
-  // ── Check if user is logged in ────────────────────────────
-  static bool get isLoggedIn =>
-      supabase.auth.currentUser != null;
-
-  // ── Get current user id ───────────────────────────────────
-  static String? get currentUserId =>
-      supabase.auth.currentUser?.id;
-
-  // ── Refresh session ───────────────────────────────────────
-  // Call this on app startup to restore session
+  // ── Restore session on app startup ───────────────────
   static Future<bool> restoreSession() async {
     try {
-      final session = supabase.auth.currentSession;
+      final session =
+          supabase.auth.currentSession;
       if (session == null) return false;
-
-      // Session is still valid
       if (!session.isExpired) return true;
-
-      // Try to refresh
       final response =
           await supabase.auth.refreshSession();
       return response.session != null;
@@ -158,23 +174,30 @@ class AuthService {
     }
   }
 
-  // ── Change password ───────────────────────────────────────
+  // ── Change password ───────────────────────────────────
   static Future<void> changePassword(
       String newPassword) async {
-    await supabase.auth
-        .updateUser(UserAttributes(password: newPassword));
+    await supabase.auth.updateUser(
+        UserAttributes(password: newPassword));
   }
 
-  // ── Delete account ────────────────────────────────────────
-  // Deletes all user data before signing out.
-  // The auth.users record deletion requires a
-  // Supabase Edge Function or admin API call.
+  // ── Send password reset email ─────────────────────────
+  static Future<void> sendPasswordReset(
+      String email) async {
+    await supabase.auth
+        .resetPasswordForEmail(email);
+  }
+
+  // ── Delete account ────────────────────────────────────
+  // Clears all user data then signs out.
+  // Auth record deletion requires admin API
+  // or a Supabase Edge Function.
   static Future<void> deleteAccount() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
     try {
-      // Clear FCM token
+      // Clear FCM token first
       await updateFcmToken(null);
 
       // Delete user data in order
@@ -193,8 +216,8 @@ class AuthService {
           .delete()
           .eq('user_id', user.id);
 
-      // Sign out — auth record deletion handled by
-      // Supabase Edge Function 'delete-user'
+      // Sign out — auth.users record deletion
+      // handled server-side via Edge Function
       await supabase.auth.signOut();
     } catch (e) {
       debugPrint('Delete account error: $e');
@@ -202,25 +225,59 @@ class AuthService {
     }
   }
 
-  // ── Send password reset email ─────────────────────────────
-  static Future<void> sendPasswordReset(
-      String email) async {
-    await supabase.auth.resetPasswordForEmail(email);
-  }
-
-  // ── Update user role in settings ──────────────────────────
-  // Call this if role changes or on first settings load
+  // ── Sync role to user_settings ────────────────────────
+  // Call after login to keep user_role in sync
   static Future<void> syncRoleToSettings() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
 
-    final profile = await getCurrentProfile();
-    final role = profile?['role'];
-    if (role == null) return;
+    try {
+      final profile = await getCurrentProfile();
+      final role = profile?['role'];
+      if (role == null) return;
 
-    await supabase.from('user_settings').upsert({
-      'user_id': user.id,
-      'user_role': role,
-    });
+      await supabase.from('user_settings').upsert({
+        'user_id': user.id,
+        'user_role': role,
+      });
+    } catch (e) {
+      debugPrint('Sync role error: $e');
+    }
+  }
+
+  // ── Create user settings after email confirm ──────────
+  // Call this after the user confirms their email
+  // and logs in for the first time
+  static Future<void> initSettingsAfterLogin() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // Check if settings already exist
+      final existing = await supabase
+          .from('user_settings')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (existing != null) return;
+
+      // Get role from profile
+      final profile = await getCurrentProfile();
+      final role = profile?['role'] ?? 'customer';
+
+      await supabase.from('user_settings').insert({
+        'user_id': user.id,
+        'user_role': role,
+        'job_radius_km': 10,
+        'notify_new_jobs': true,
+        'notify_application_updates': true,
+        'notify_messages': true,
+        'notify_promotions': false,
+        'show_tips': true,
+      });
+    } catch (e) {
+      debugPrint('Init settings error: $e');
+    }
   }
 }
