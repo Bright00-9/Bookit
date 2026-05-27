@@ -117,7 +117,6 @@ class _MyJobsScreenState extends State<MyJobsScreen>
             workerId: job['accepted_worker_id'] ?? '',
             workerName: job['worker_name'] ?? 'Worker',
             jobTitle: job['title'] ?? '',
-            amount: (job['budget'] as num?)?.toDouble() ?? 0,
           ),
         ),
       );
@@ -461,7 +460,6 @@ class _MyJobsScreenState extends State<MyJobsScreen>
                     workerId: job['accepted_worker_id'] ?? '',
                     workerName: job['worker_name'] ?? 'Worker',
                     jobTitle: job['title'] ?? '',
-                    amount: (job['budget'] as num?)?.toDouble() ?? 0,
                   ),
                 ),
               ),

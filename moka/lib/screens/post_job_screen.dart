@@ -20,7 +20,6 @@ class PostJobScreen extends StatefulWidget {
 class _PostJobScreenState extends State<PostJobScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-  final _budgetController = TextEditingController();
   late MapController _mapController;
 
   String? _selectedSkill;
@@ -55,7 +54,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    _budgetController.dispose();
     super.dispose();
   }
 
@@ -186,9 +184,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
         urgency: _selectedUrgency,
         lat: _lat!,
         lng: _lng!,
-        budget:
-            double.tryParse(_budgetController.text.trim()) ??
-                0,
         categoryId: _selectedCategory?.id,
         address: _locationLabel,
         radiusKm: _radiusKm,
@@ -577,18 +572,6 @@ class _PostJobScreenState extends State<PostJobScreen> {
                           );
                         }).toList(),
                       ),
-
-            const SizedBox(height: 20),
-
-            // ── BUDGET ────────────────────────────────────
-            _buildLabel('Budget (GHS)'),
-            const SizedBox(height: 8),
-            _buildTextField(
-              controller: _budgetController,
-              hint: 'e.g. 150.00',
-              prefixIcon: Icons.payments_outlined,
-              keyboardType: TextInputType.number,
-            ),
 
             const SizedBox(height: 20),
 

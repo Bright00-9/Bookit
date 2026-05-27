@@ -16,7 +16,7 @@ import 'settings_screen.dart';
 import 'worker_list_screen.dart';
 import 'leaderboard_screen.dart';
 import '../services/notification_service.dart';
-
+import '../widgets/apply_job_sheet.dart';
 
 class WorkerHomeScreen extends StatefulWidget {
   const WorkerHomeScreen({super.key});
@@ -150,37 +150,6 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
       debugPrint('Error loading jobs: $e');
     } finally {
       if (mounted) setState(() => _isLoadingJobs = false);
-    }
-  }
-
-  Future<void> _applyToJob(String jobId) async {
-    try {
-      await JobService.applyToJob(jobId);
-      setState(
-          () => _nearbyJobs.removeWhere((j) => j['id'] == jobId));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-              'Applied! Wait for the customer to accept you.'),
-          backgroundColor: const Color(0xFF4CAF50),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              const Text('Could not apply to job. Try again.'),
-          backgroundColor: const Color(0xFFE53935),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
-        ),
-      );
     }
   }
 
@@ -1115,15 +1084,25 @@ class _WorkerHomeScreenState extends State<WorkerHomeScreen>
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: () => _applyToJob(job['id']),
+                  onPressed: () => ApplyJobSheet.show(
+                    context,
+                    jobId: job['id'],
+                    jobTitle: job['title'] ?? 'Job',
+                    customerName:
+                        job['profiles']?['name'] ?? 'Customer',
+                    onApplied: () {
+                      // Remove from nearby list after applying
+                      setState(() => _nearbyJobs
+                          .removeWhere((j) => j['id'] == job['id']));
+                    },
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6B00),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 10),
+                        borderRadius: BorderRadius.circular(10)),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 10),
                     elevation: 0,
                   ),
                   child: const Text('Apply for Job',
