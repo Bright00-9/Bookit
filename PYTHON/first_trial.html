@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number Guessing Game</title>
+    <link rel="stylesheet" href="first_trial.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="creator"><p>This game was created by Mr. Bright</p></div>
+            <h1>Number Guessing Game</h1>
+            <p>Guess the secret number!</p>
+        </div>
+
+        <div class="game-info" id="gameInfo">
+            <p>Range: <strong>1 - 50</strong></p>
+            <p>Attempts Left: <strong id="attemptsLeft">5</strong></p>
+        </div>
+
+        <div class="feedback" id="feedback"></div>
+
+        <div id="gameContainer">
+            <div class="input-group">
+                <label for="guessInput">Enter your guess:</label>
+                <input type="number" id="guessInput" min="1" max="10" placeholder="Enter a number...">
+            </div>
+
+            <div class="button-group">
+                <button class="btn-guess" onclick="submitGuess()">Submit Guess</button>
+                <button class="btn-reset" onclick="resetGame()">New Game</button>
+            </div>
+        </div>
+
+        <div class="game-over" id="gameOver">
+            <div class="emoji" id="endEmoji">🎉</div>
+            <h2 id="endMessage">Congratulations!</h2>
+            <div class="stats">
+                <p>Secret Number: <strong id="secretNumberDisplay">-</strong></p>
+                <p>Your Attempts: <strong id="attemptsUsed">-</strong></p>
+            </div>
+            <div class="button-group" style="margin-top: 20px;">
+                <button class="btn-guess" onclick="resetGame()">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="first_trial.js"></script>
+</body>
+</html>
