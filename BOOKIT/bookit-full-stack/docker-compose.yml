@@ -1,0 +1,155 @@
+name: bookit
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Named volume: data survives container restarts/recreates, unlike
+      # the container's own writable layer which is thrown away on `rm`.
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432' # exposed to host only for local debugging (psql, GUI clients)
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [bookit-net]
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - '5672:5672'
+      - '15672:15672' # management UI - http://localhost:15672, guest/guest
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [bookit-net]
+
+  migrate:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./migrations-runner/migrations:/migrations:ro
+      - ./migrations-runner/run-migrations.sh:/run-migrations.sh:ro
+    entrypoint: ['sh', '/run-migrations.sh']
+    networks: [bookit-net]
+    # No restart policy - this is a one-shot job, not a long-running
+    # service. It exits 0 on success and stays exited, which is correct.
+
+  auth-service:
+    build: ./auth-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 1h
+    networks: [bookit-net]
+
+  availability-service:
+    build: ./availability-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    networks: [bookit-net]
+
+  booking-service:
+    build: ./booking-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      availability-service:
+        condition: service_started
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Internal DNS: "availability-service" resolves automatically to that
+      # container's IP on this network - no hardcoded IPs, no localhost.
+      # This is the same service-discovery pattern Kubernetes Services
+      # provide later, just implemented via Docker's embedded DNS here.
+      AVAILABILITY_SERVICE_URL: http://availability-service:3002
+      RABBIT_URL: amqp://rabbitmq:5672
+      BOOKING_EVENTS_QUEUE: booking-events
+    networks: [bookit-net]
+
+  notification-service:
+    build: ./notification-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PORT: 3004
+      NODE_ENV: production
+      RABBIT_URL: amqp://rabbitmq:5672
+      BOOKING_EVENTS_QUEUE: booking-events
+    networks: [bookit-net]
+
+  api-gateway:
+    build: ./api-gateway
+    depends_on:
+      auth-service:
+        condition: service_started
+      availability-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+    environment:
+      PORT: 8080
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_ORIGIN: http://localhost:5173
+      AUTH_SERVICE_URL: http://auth-service:3001
+      AVAILABILITY_SERVICE_URL: http://availability-service:3002
+      BOOKING_SERVICE_URL: http://booking-service:3003
+    ports:
+      - '8080:8080' # the only backend port exposed to your host machine's browser
+    networks: [bookit-net]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the JS bundle at image build time - see Dockerfile
+        # comment for why this can't be an environment: override at runtime.
+        VITE_API_BASE_URL: http://localhost:8080
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - '5173:80'
+    networks: [bookit-net]
+
+networks:
+  bookit-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
