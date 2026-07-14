@@ -40,6 +40,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./migrations-runner/migrations:/migrations:ro
       - ./migrations-runner/run-migrations.sh:/run-migrations.sh:ro
