@@ -1,0 +1,373 @@
+/* ============================================================
+   BookIt design system — "Departures Board"
+   A booking platform reads naturally as a schedule board: each
+   session is a row, capacity is a row of seats filling up like
+   a split-flap display, and a confirmed booking is a ticket.
+   ============================================================ */
+
+:root {
+  --bg: #10141a;
+  --surface: #171d26;
+  --surface-2: #1f2733;
+  --accent: #f2a541;
+  --accent-soft: #f2a54122;
+  --accent-2: #34d1a4;
+  --accent-2-soft: #34d1a422;
+  --danger: #e2574c;
+  --danger-soft: #e2574c22;
+  --ink: #e8ecf1;
+  --ink-muted: #8993a4;
+  --ink-faint: #5b6474;
+  --line: #262f3d;
+  --radius: 10px;
+  --font-display: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--bg);
+  background-image:
+    radial-gradient(circle at 15% 0%, #f2a54112 0%, transparent 45%),
+    radial-gradient(circle at 85% 100%, #34d1a410 0%, transparent 40%);
+  background-attachment: fixed;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---------- Top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar .wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.topbar .wordmark .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  box-shadow: 0 0 0 3px var(--accent-2-soft);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.topbar .session-info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.topbar .session-info button {
+  width: auto;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8rem;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+}
+
+.topbar .session-info button:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+/* ---------- Page shells ---------- */
+
+.page-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.auth-shell {
+  min-height: calc(100% - 65px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+}
+
+/* ---------- Ticket card (auth forms) ---------- */
+
+.ticket-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+}
+
+.ticket-card::before {
+  content: '';
+  display: block;
+  height: 6px;
+  background: repeating-linear-gradient(
+    90deg, var(--accent) 0 10px, transparent 10px 20px
+  );
+}
+
+.ticket-card .ticket-body { padding: 2rem 1.75rem 1.75rem; }
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.4rem;
+}
+
+.ticket-card h1 {
+  font-size: 1.4rem;
+  margin: 0 0 1.5rem;
+  font-weight: 600;
+}
+
+form { display: flex; flex-direction: column; gap: 1.1rem; }
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+input {
+  padding: 0.65rem 0.8rem;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+button {
+  padding: 0.7rem;
+  border-radius: 7px;
+  border: none;
+  background: var(--accent);
+  color: #1a1200;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+button:hover:not(:disabled) { filter: brightness(1.08); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ticket-card p { font-size: 0.85rem; color: var(--ink-muted); margin: 1.2rem 0 0; }
+.ticket-card a { color: var(--accent); text-decoration: none; font-weight: 500; }
+.ticket-card a:hover { text-decoration: underline; }
+
+.error { color: var(--danger); font-size: 0.85rem; margin: 0; }
+.success { color: var(--accent-2); font-size: 0.85rem; margin: 0; }
+
+/* ---------- Board header ---------- */
+
+.board-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.board-header h1 {
+  font-size: 1.5rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.board-header .sub {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+
+.board-columns {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 1rem;
+  padding: 0 1.1rem;
+  margin: 1.75rem 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 560px) {
+  .board-columns { display: none; }
+}
+
+/* ---------- Slot rows ---------- */
+
+.slots-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+
+.slot-row {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 1rem;
+  transition: border-color 0.15s ease;
+}
+
+.slot-row:hover { border-color: var(--ink-faint); }
+
+.slot-row.mine { border-color: var(--accent-2); }
+.slot-row.full { opacity: 0.65; }
+
+@media (max-width: 560px) {
+  .slot-row { grid-template-columns: 1fr; }
+}
+
+.slot-main .title { font-weight: 600; font-size: 0.98rem; margin: 0 0 0.3rem; }
+.slot-main .time {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+/* Signature element: seat gauge — one tick per unit of capacity,
+   filled ticks = booked. Reads like a split-flap board filling in. */
+.seat-gauge { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; }
+
+.seat-gauge .ticks { display: flex; gap: 3px; }
+
+.seat-gauge .tick {
+  width: 7px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.seat-gauge .tick.filled { background: var(--accent); }
+.seat-gauge.full .tick.filled { background: var(--danger); }
+
+.seat-gauge .label {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- Status badge / actions ---------- */
+
+.slot-action { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+
+.badge {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.55rem;
+  border-radius: 5px;
+}
+
+.badge.booked { background: var(--accent-2-soft); color: var(--accent-2); }
+.badge.full { background: var(--danger-soft); color: var(--danger); }
+
+.slot-action button {
+  width: auto;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.82rem;
+}
+
+.slot-action button.secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+}
+
+.slot-action button.secondary:hover { border-color: var(--danger); color: var(--danger); }
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--ink-faint);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.guest-note {
+  text-align: center;
+  padding: 0.9rem;
+  margin-top: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.guest-note a { color: var(--accent); }
+
+/* ---------- Admin form ---------- */
+
+.admin-shell { max-width: 460px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+
+.admin-shell .ticket-card { max-width: none; }
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+@media (max-width: 480px) {
+  .field-row { grid-template-columns: 1fr; }
+}
+
+/* ---------- Loading ---------- */
+
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  color: var(--ink-faint);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+}

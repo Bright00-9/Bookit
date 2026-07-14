@@ -19,7 +19,6 @@ Browser → frontend (Nginx, :5173)
                   Postgres
 ```
 
-
 - **frontend** — React SPA, talks only to api-gateway
 - **api-gateway** — single entry point; issues httpOnly session cookie, rate limits, CORS
 - **auth-service** — signup/login, JWT issuing
@@ -44,16 +43,34 @@ First run will:
 
 Then visit **http://localhost:5173**.
 
-Useful commands while it's running:
+## Seeing the services actually talk to each other
+
+The board comes pre-seeded with 4 sample sessions and one demo admin account, so there's something to interact with immediately:
+
+```
+Admin login:  admin@bookit.dev / admin12345
+```
+
+**To watch every service's part in a single request**, open a terminal and run:
+```bash
+docker compose logs -f --tail=0
+```
+This tails every container's logs together, each line tagged with its service name. Leave it running, then in the browser:
+
+1. **Sign up** as a new (non-admin) user — watch `auth-service` log the account creation and `api-gateway` log the cookie being issued
+2. **Reserve a seat** on one of the seeded sessions — watch, in order: `api-gateway` route the request, `booking-service` call `availability-service` to reserve the seat, `availability-service` log the seat count updating, `booking-service` log the booking being confirmed and the event being published, and `notification-service` log picking that event off the queue and "sending" a confirmation
+3. **Cancel the booking** — watch the same chain run in reverse (release the seat, publish `booking.cancelled`, notification-service logs the cancellation)
+4. **Log in as the seeded admin** and create a new session — watch `availability-service` log it going onto the board
+
+RabbitMQ's management UI (**http://localhost:15672**, guest/guest) lets you watch messages land in the `booking-events` queue in real time as well, which is worth a look at least once — you'll see the queue depth go to 1 and back to 0 as booking-service publishes and notification-service consumes.
+
+## Useful commands while it's running
 ```bash
 docker compose ps                       # see status of every container
 docker compose logs -f booking-service  # tail logs for one service
-docker compose logs -f notification-service  # watch notifications get consumed
 docker compose down                     # stop everything
 docker compose down -v                  # stop everything AND wipe the Postgres volume
 ```
-
-RabbitMQ's management UI is at **http://localhost:15672** (guest/guest) — useful for watching messages flow through the `booking-events` queue in real time.
 
 ## Why one shared Postgres instance?
 
